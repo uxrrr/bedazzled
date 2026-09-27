@@ -44,6 +44,18 @@
     const pendingAuth = getPendingAuthAction();
     if (!pendingAuth) requireLogin();
 
+    if (pendingAuth) {
+      // The widget auto-processes the same invite/recovery token itself and
+      // ends up as a full-viewport, invisible, click-eating overlay (its own
+      // broken modal) that re-asserts its inline styles asynchronously — a
+      // one-time JS style change gets overwritten moments later. A
+      // stylesheet !important rule beats the widget's own inline styles
+      // permanently, regardless of when/how often it re-sets them.
+      const style = document.createElement("style");
+      style.textContent = "#netlify-identity-widget { display: none !important; pointer-events: none !important; }";
+      document.head.appendChild(style);
+    }
+
     document.getElementById("spf-submit")?.addEventListener("click", async () => {
       const password = document.getElementById("spf-password").value;
       const confirm = document.getElementById("spf-confirm").value;
@@ -161,15 +173,6 @@
       } else if (pendingAuth) {
         document.getElementById("status").hidden = true;
         document.getElementById("set-password-screen").hidden = false;
-        // The widget auto-processes the same invite/recovery token itself
-        // and leaves behind a full-viewport, invisible, click-eating overlay
-        // (its own broken modal) — neutralize it so our form is actually
-        // usable underneath.
-        const widgetEl = document.getElementById("netlify-identity-widget");
-        if (widgetEl) {
-          widgetEl.style.pointerEvents = "none";
-          widgetEl.style.display = "none";
-        }
       }
     });
     netlifyIdentity.on("login", () => load());
