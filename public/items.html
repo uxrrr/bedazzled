@@ -286,7 +286,13 @@
       await applyMutation(res);
     });
 
-    netlifyIdentity.on("init", () => load());
+    // Only load data once a user actually exists — see app.js's
+    // hasIdentityToken() comment for why an unconditional load() here would
+    // break the invite/recovery "set password" modal.
+    netlifyIdentity.on("init", (user) => {
+      if (user) load();
+    });
+    netlifyIdentity.on("login", () => load());
     netlifyIdentity.init();
   </script>
 </body>

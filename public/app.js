@@ -2,8 +2,20 @@
 // handling, and client-side photo resizing. No build step — plain script,
 // loaded by every page.
 
+// True when the URL carries an Identity one-time token (invite, password
+// recovery, email confirmation/change) — the widget itself needs to see
+// these to pop its own "set password" modal. Redirecting away before that
+// happens (as requireLogin/authHeaders do for a logged-out visitor) throws
+// the token away and strands the user on a plain login screen instead.
+function hasIdentityToken() {
+  return /(?:^|[?&#])(invite_token|recovery_token|confirmation_token|email_change_token)=/.test(
+    window.location.hash + window.location.search
+  );
+}
+
 function requireLogin() {
   if (!window.netlifyIdentity) return;
+  if (hasIdentityToken()) return;
   const user = netlifyIdentity.currentUser();
   if (!user) {
     window.location.href = "/login.html";

@@ -112,7 +112,13 @@
       }
     }
 
-    netlifyIdentity.on("init", () => load());
+    // Only load data once a user actually exists — calling load() when no
+    // one's logged in yet would redirect via authHeaders() before the widget
+    // gets a chance to show its invite/recovery "set password" modal.
+    netlifyIdentity.on("init", (user) => {
+      if (user) load();
+    });
+    netlifyIdentity.on("login", () => load());
     netlifyIdentity.init();
   </script>
 </body>
