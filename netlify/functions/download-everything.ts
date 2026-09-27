@@ -1,7 +1,6 @@
-import type { Handler } from "@netlify/functions";
 import archiver from "archiver";
 import { PassThrough } from "stream";
-import { requireUser, unauthorizedResponse } from "../../lib/auth";
+import { withAuth } from "../../lib/auth";
 import { itemsStore, photosStore } from "../../lib/stores";
 import { decrypt, decryptJson } from "../../lib/crypto";
 import { logAudit } from "../../lib/audit";
@@ -18,48 +17,34 @@ import type { Item } from "../../lib/types";
 // grows a lot this function would need to switch to a background function
 // that uploads the zip to a temporary blob and returns a download link
 // instead of returning the zip bytes directly.
-export const handler: Handler = async (event, context) => {
-  let user;
-  try {
-    user = requireUser(context);
-  } catch {
-    return unauthorizedResponse();
-  }
-
+export const handler = withAuth(async (user) => {
   const items = itemsStore();
   const photos = photosStore();
   const { blobs } = await items.list();
 
-  const chunks: Buffer[] = [];
-  const stream = new PassThrough();
-  stream.on("data", (chunk) => chunks.push(chunk));
+  // Fetch + decrypt all items in parallel rather than one at a time.
+  const loadedItems = (
+    await Promise.all(
+      blobs.map(async ({ key }) => {
+        const raw = await items.get(key, { type: "arrayBuffer" });
+        return raw ? decryptJson<Item>(Buffer.from(raw), key) : null;
+      })
+    )
+  ).filter((item): item is Item => item !== null);
 
-  const archive = archiver("zip", { zlib: { level: 9 } });
-  archive.pipe(stream);
-
-  const manifest: Item[] = [];
-
-  for (const { key } of blobs) {
-    const raw = await items.get(key, { type: "arrayBuffer" });
-    if (!raw) continue;
-    const item = decryptJson<Item>(Buffer.from(raw), key);
-    manifest.push(item);
-
-    for (const photo of item.photos) {
+  // Fetch + decrypt every photo across every item in parallel too.
+  const photoJobs = loadedItems.flatMap((item) =>
+    item.photos.map(async (photo) => {
       const fullRaw = await photos.get(photo.full, { type: "arrayBuffer" });
-      if (fullRaw) {
-        const plaintext = decrypt(Buffer.from(fullRaw), `${photo.full}|${photo.mime}`);
-        const ext = photo.mime.split("/")[1] || "jpg";
-        archive.append(plaintext, { name: `photos/${item.listNumber ?? "x"}-${item.id}-${photo.id}.${ext}` });
-      }
-    }
-  }
+      if (!fullRaw) return null;
+      const plaintext = decrypt(Buffer.from(fullRaw), `${photo.full}|${photo.mime}`);
+      const ext = photo.mime.split("/")[1] || "jpg";
+      return { name: `photos/${item.listNumber ?? "x"}-${item.id}-${photo.id}.${ext}`, plaintext };
+    })
+  );
+  const photoFiles = (await Promise.all(photoJobs)).filter((f): f is NonNullable<typeof f> => f !== null);
 
-  archive.append(JSON.stringify(manifest, null, 2), { name: "items.json" });
-  await archive.finalize();
-
-  await new Promise((resolve) => stream.on("end", resolve));
-  const zipBuffer = Buffer.concat(chunks);
+  const zipBuffer = await buildZip(loadedItems, photoFiles);
 
   await logAudit(user, null, "download-everything");
 
@@ -73,4 +58,24 @@ export const handler: Handler = async (event, context) => {
     body: zipBuffer.toString("base64"),
     isBase64Encoded: true,
   };
-};
+});
+
+function buildZip(items: Item[], photoFiles: { name: string; plaintext: Buffer }[]): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    const stream = new PassThrough();
+    stream.on("data", (chunk) => chunks.push(chunk));
+    stream.on("end", () => resolve(Buffer.concat(chunks)));
+    stream.on("error", reject);
+
+    const archive = archiver("zip", { zlib: { level: 9 } });
+    archive.on("error", reject);
+    archive.pipe(stream);
+
+    for (const file of photoFiles) {
+      archive.append(file.plaintext, { name: file.name });
+    }
+    archive.append(JSON.stringify(items, null, 2), { name: "items.json" });
+    archive.finalize();
+  });
+}

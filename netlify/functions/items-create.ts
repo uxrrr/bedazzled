@@ -1,20 +1,10 @@
-import type { Handler } from "@netlify/functions";
 import { randomUUID } from "crypto";
-import { requireUser, unauthorizedResponse } from "../../lib/auth";
-import { itemsStore } from "../../lib/stores";
-import { encryptJson } from "../../lib/crypto";
-import { toArrayBuffer } from "../../lib/bytes";
+import { withAuth } from "../../lib/auth";
+import { createItem } from "../../lib/versioned-item-store";
 import { logAudit } from "../../lib/audit";
 import type { Item } from "../../lib/types";
 
-export const handler: Handler = async (event, context) => {
-  let user;
-  try {
-    user = requireUser(context);
-  } catch {
-    return unauthorizedResponse();
-  }
-
+export const handler = withAuth(async (user, event) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: "Method not allowed" };
   }
@@ -36,17 +26,12 @@ export const handler: Handler = async (event, context) => {
     updatedAt: now,
   };
 
-  // @netlify/blobs has no conditional-write API, so concurrency is handled
-  // manually via a version number in blob metadata (see items-update.ts).
-  // Collision on a fresh randomUUID() id is not a practical concern here.
-  const store = itemsStore();
-  await store.set(id, toArrayBuffer(encryptJson(item, id)), { metadata: { version: 1 } });
-
+  const version = await createItem(item);
   await logAudit(user, id, "create-item");
 
   return {
     statusCode: 201,
-    headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ETag: "1" },
+    headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ETag: String(version) },
     body: JSON.stringify(item),
   };
-};
+});

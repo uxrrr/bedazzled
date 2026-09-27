@@ -1,5 +1,4 @@
-import type { Handler } from "@netlify/functions";
-import { requireUser, unauthorizedResponse } from "../../lib/auth";
+import { withAuth } from "../../lib/auth";
 import { photosStore } from "../../lib/stores";
 import { decrypt } from "../../lib/crypto";
 
@@ -8,13 +7,7 @@ import { decrypt } from "../../lib/crypto";
 // client is expected to fetch() this with a fresh Identity JWT and turn the
 // response into an object URL, since <img src> can't carry an Authorization
 // header.
-export const handler: Handler = async (event, context) => {
-  try {
-    requireUser(context);
-  } catch {
-    return unauthorizedResponse();
-  }
-
+export const handler = withAuth(async (_user, event) => {
   const blobId = event.queryStringParameters?.blobId;
   const mime = event.queryStringParameters?.mime;
   if (!blobId || !mime) {
@@ -38,4 +31,4 @@ export const handler: Handler = async (event, context) => {
     body: plaintext.toString("base64"),
     isBase64Encoded: true,
   };
-};
+});

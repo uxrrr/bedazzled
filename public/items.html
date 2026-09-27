@@ -69,15 +69,35 @@
     let currentItem = null;
     let currentEtag = null;
     let lightbox = null;
-    const objectUrls = [];
+    let currentObjectUrls = [];
 
+    // render() is called repeatedly on this page (after every mutation), so
+    // object URLs from the PREVIOUS render must be revoked before creating a
+    // new batch — otherwise every edit leaks another render's worth of blob
+    // URLs for the rest of the session.
+    function revokeCurrentUrls() {
+      currentObjectUrls.forEach((u) => URL.revokeObjectURL(u));
+      currentObjectUrls = [];
+    }
     function trackUrl(url) {
-      objectUrls.push(url);
+      currentObjectUrls.push(url);
       return url;
     }
-    window.addEventListener("beforeunload", () => {
-      objectUrls.forEach((u) => URL.revokeObjectURL(u));
-    });
+    window.addEventListener("beforeunload", revokeCurrentUrls);
+
+    // Wraps a mutation response: on 409 (someone else changed the item),
+    // alert and reload the latest version; otherwise re-render with the new
+    // item + ETag. Shared by every write action below instead of each one
+    // repeating the same conflict-handling branch.
+    async function applyMutation(res) {
+      if (res.status === 409) {
+        alert("Someone else changed this item. Reloading latest version.");
+        await load();
+        return;
+      }
+      const item = await res.json();
+      await render(item, res.headers.get("ETag"));
+    }
 
     function naturalSize(url) {
       return new Promise((resolve) => {
@@ -88,6 +108,7 @@
     }
 
     async function render(item, etag) {
+      revokeCurrentUrls();
       currentItem = item;
       currentEtag = etag;
 
@@ -112,15 +133,28 @@
 
       const strip = document.getElementById("thumb-strip");
       strip.innerHTML = "";
-      const dataSource = [];
 
-      for (const photo of item.photos) {
-        const thumbUrl = trackUrl(await fetchPhotoObjectUrl(photo.thumb, photo.mime));
-        const fullUrl = trackUrl(await fetchPhotoObjectUrl(photo.full, photo.mime));
-        const { width, height } = await naturalSize(fullUrl);
-        const index = dataSource.length;
-        dataSource.push({ src: fullUrl, width, height, alt: item.title });
+      // Fetch/decrypt every photo's thumb+full in parallel rather than one
+      // photo at a time — each fetch is its own network round trip.
+      const photoData = await Promise.all(
+        item.photos.map(async (photo) => {
+          const [thumbUrl, fullUrl] = await Promise.all([
+            fetchPhotoObjectUrl(photo.thumb, photo.mime).then(trackUrl),
+            fetchPhotoObjectUrl(photo.full, photo.mime).then(trackUrl),
+          ]);
+          const { width, height } = await naturalSize(fullUrl);
+          return { photo, thumbUrl, fullUrl, width, height };
+        })
+      );
 
+      const dataSource = photoData.map(({ fullUrl, width, height }) => ({
+        src: fullUrl,
+        width,
+        height,
+        alt: item.title,
+      }));
+
+      photoData.forEach(({ photo, thumbUrl }, index) => {
         const wrap = document.createElement("div");
         wrap.className = "thumb";
         const img = document.createElement("img");
@@ -150,7 +184,7 @@
         wrap.appendChild(actions);
 
         strip.appendChild(wrap);
-      }
+      });
 
       // Cover image itself also opens the gallery (per plan: single photo
       // opens full-size directly, multi-photo opens the PhotoSwipe gallery).
@@ -195,22 +229,20 @@
     async function setCover(photoId) {
       const res = await apiFetch("/.netlify/functions/items-set-cover", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "If-Match": currentEtag },
         body: JSON.stringify({ itemId, photoId }),
       });
-      const item = await res.json();
-      await render(item, res.headers.get("ETag"));
+      await applyMutation(res);
     }
 
     async function deletePhoto(photoId) {
       if (!confirm("Delete this photo?")) return;
       const res = await apiFetch("/.netlify/functions/items-delete-photo", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "If-Match": currentEtag },
         body: JSON.stringify({ itemId, photoId }),
       });
-      const item = await res.json();
-      await render(item, res.headers.get("ETag"));
+      await applyMutation(res);
     }
 
     document.getElementById("add-photo-btn").addEventListener("click", () => {
@@ -238,14 +270,8 @@
         headers: { "Content-Type": "application/json", "If-Match": currentEtag },
         body: JSON.stringify(currentItem),
       });
-      if (res.status === 409) {
-        alert("Someone else changed this item. Reloading latest version.");
-        await load();
-        return;
-      }
-      const item = await res.json();
-      document.getElementById("new-note").value = "";
-      await render(item, res.headers.get("ETag"));
+      if (res.ok) document.getElementById("new-note").value = "";
+      await applyMutation(res);
     });
 
     document.getElementById("edit-btn").addEventListener("click", async () => {
@@ -262,13 +288,7 @@
         headers: { "Content-Type": "application/json", "If-Match": currentEtag },
         body: JSON.stringify(currentItem),
       });
-      if (res.status === 409) {
-        alert("Someone else changed this item. Reloading latest version.");
-        await load();
-        return;
-      }
-      const item = await res.json();
-      await render(item, res.headers.get("ETag"));
+      await applyMutation(res);
     });
 
     netlifyIdentity.on("init", () => load());

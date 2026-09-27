@@ -1,25 +1,13 @@
-import type { Handler } from "@netlify/functions";
-import { requireUser, unauthorizedResponse } from "../../lib/auth";
-import { itemsStore } from "../../lib/stores";
-import { encryptJson } from "../../lib/crypto";
-import { toArrayBuffer } from "../../lib/bytes";
+import type { HandlerResponse } from "@netlify/functions";
+import { withAuth } from "../../lib/auth";
+import { saveItem, VersionConflict } from "../../lib/versioned-item-store";
 import { logAudit } from "../../lib/audit";
 import type { Item } from "../../lib/types";
 
-// @netlify/blobs has no conditional/compare-and-swap write API (its set()
-// only takes {metadata} and returns void) — this is a best-effort optimistic
-// concurrency check via a version number in blob metadata, not a true atomic
-// compare-and-swap. There's a small race window between the read and the
-// write below. That's an acceptable tradeoff for a handful of trusted
-// collaborators occasionally editing the same item, not a hard guarantee.
-export const handler: Handler = async (event, context) => {
-  let user;
-  try {
-    user = requireUser(context);
-  } catch {
-    return unauthorizedResponse();
-  }
-
+// Client sends the full updated Item plus the If-Match header it got back
+// from items-get.ts / items-create.ts. See lib/versioned-item-store.ts for
+// how the version check works and its limits.
+export const handler = withAuth(async (user, event): Promise<HandlerResponse> => {
   if (event.httpMethod !== "PUT") {
     return { statusCode: 405, body: "Method not allowed" };
   }
@@ -34,27 +22,19 @@ export const handler: Handler = async (event, context) => {
     return { statusCode: 400, body: JSON.stringify({ error: "Missing item id" }) };
   }
 
-  const store = itemsStore();
-  const current = await store.getMetadata(item.id);
-  if (!current) {
-    return { statusCode: 404, body: JSON.stringify({ error: "Item not found" }) };
+  let newVersion: number;
+  try {
+    newVersion = await saveItem(item.id, item, Number(ifMatch));
+  } catch (err) {
+    if (err instanceof VersionConflict) {
+      return {
+        statusCode: 409,
+        headers: { "Cache-Control": "no-store" },
+        body: JSON.stringify({ error: err.message }),
+      };
+    }
+    throw err;
   }
-
-  const currentVersion = Number(current.metadata?.version ?? 1);
-  if (String(currentVersion) !== ifMatch) {
-    return {
-      statusCode: 409,
-      headers: { "Cache-Control": "no-store" },
-      body: JSON.stringify({ error: "Item was changed by someone else, reload and retry" }),
-    };
-  }
-
-  const newVersion = currentVersion + 1;
-  item.updatedAt = new Date().toISOString();
-
-  await store.set(item.id, toArrayBuffer(encryptJson(item, item.id)), {
-    metadata: { version: newVersion },
-  });
 
   await logAudit(user, item.id, "update-item");
 
@@ -63,4 +43,4 @@ export const handler: Handler = async (event, context) => {
     headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ETag: String(newVersion) },
     body: JSON.stringify(item),
   };
-};
+});

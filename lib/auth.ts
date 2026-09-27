@@ -1,4 +1,4 @@
-import type { HandlerContext } from "@netlify/functions";
+import type { Handler, HandlerContext, HandlerEvent, HandlerResponse } from "@netlify/functions";
 
 export interface IdentityUser {
   sub: string;
@@ -34,5 +34,24 @@ export function unauthorizedResponse() {
     statusCode: 401,
     headers: { "Cache-Control": "no-store" },
     body: JSON.stringify({ error: "Unauthorized" }),
+  };
+}
+
+/**
+ * Wraps a function handler so the auth check can't be forgotten — every
+ * Netlify Function in this project should be defined via withAuth() rather
+ * than repeating the requireUser()/try-catch boilerplate itself.
+ */
+export function withAuth(
+  fn: (user: IdentityUser, event: HandlerEvent, context: HandlerContext) => Promise<HandlerResponse>
+): Handler {
+  return async (event, context) => {
+    let user: IdentityUser;
+    try {
+      user = requireUser(context);
+    } catch {
+      return unauthorizedResponse();
+    }
+    return fn(user, event, context);
   };
 }

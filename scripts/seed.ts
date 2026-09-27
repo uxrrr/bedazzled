@@ -174,18 +174,21 @@ const FULL_TARGET_BYTES = 1.5 * 1024 * 1024;
 
 async function resizeToBuffer(inputPath: string, maxDim: number, targetBytes: number): Promise<Buffer> {
   let dim = maxDim;
+  let last: Buffer | null = null;
   for (let attempt = 0; attempt < 4; attempt++) {
+    const isLastAttempt = attempt === 3;
     for (let quality = 90; quality >= 50; quality -= 10) {
-      const buf = await sharp(inputPath)
+      last = await sharp(inputPath)
         .rotate()
         .resize({ width: dim, height: dim, fit: "inside", withoutEnlargement: true })
         .jpeg({ quality })
         .toBuffer();
-      if (buf.length <= targetBytes || (dim <= 320 && quality <= 50)) return buf;
+      if (last.length <= targetBytes) return last;
+      if (isLastAttempt && quality === 50) return last; // give up, return smallest attempt
     }
     dim = Math.round(dim * 0.75);
   }
-  return sharp(inputPath).rotate().resize({ width: 320 }).jpeg({ quality: 50 }).toBuffer();
+  return last!;
 }
 
 async function addPhoto(itemsStore: ReturnType<typeof store>, photosStore: ReturnType<typeof store>, item: Item, filePath: string) {

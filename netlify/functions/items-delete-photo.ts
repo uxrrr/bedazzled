@@ -1,21 +1,16 @@
-import type { Handler } from "@netlify/functions";
-import { requireUser, unauthorizedResponse } from "../../lib/auth";
-import { itemsStore, photosStore } from "../../lib/stores";
-import { decryptJson, encryptJson } from "../../lib/crypto";
-import { toArrayBuffer } from "../../lib/bytes";
+import { withAuth } from "../../lib/auth";
+import { photosStore } from "../../lib/stores";
+import { loadItem, saveItem, VersionConflict } from "../../lib/versioned-item-store";
 import { logAudit } from "../../lib/audit";
-import type { Item } from "../../lib/types";
 
-export const handler: Handler = async (event, context) => {
-  let user;
-  try {
-    user = requireUser(context);
-  } catch {
-    return unauthorizedResponse();
-  }
-
+export const handler = withAuth(async (user, event) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: "Method not allowed" };
+  }
+
+  const ifMatch = event.headers["if-match"] || event.headers["If-Match"];
+  if (!ifMatch) {
+    return { statusCode: 428, body: JSON.stringify({ error: "If-Match header required" }) };
   }
 
   const { itemId, photoId } = JSON.parse(event.body || "{}");
@@ -23,15 +18,12 @@ export const handler: Handler = async (event, context) => {
     return { statusCode: 400, body: JSON.stringify({ error: "itemId and photoId required" }) };
   }
 
-  const items = itemsStore();
-  const photos = photosStore();
-
-  const result = await items.getWithMetadata(itemId, { type: "arrayBuffer" });
-  if (!result || !result.data) {
+  const loaded = await loadItem(itemId);
+  if (!loaded) {
     return { statusCode: 404, body: JSON.stringify({ error: "Item not found" }) };
   }
+  const { item } = loaded;
 
-  const item = decryptJson<Item>(Buffer.from(result.data), itemId);
   const target = item.photos.find((p) => p.id === photoId);
   if (!target) {
     return { statusCode: 404, body: JSON.stringify({ error: "Photo not found on item" }) };
@@ -41,14 +33,17 @@ export const handler: Handler = async (event, context) => {
   if (item.coverPhotoId === photoId) {
     item.coverPhotoId = item.photos[0]?.id ?? null;
   }
-  item.updatedAt = new Date().toISOString();
 
-  // Best-effort version check, not a true compare-and-swap — see items-update.ts.
-  const currentVersion = Number(result.metadata?.version ?? 1);
-  await items.set(itemId, toArrayBuffer(encryptJson(item, itemId)), {
-    metadata: { version: currentVersion + 1 },
-  });
+  try {
+    await saveItem(itemId, item, Number(ifMatch));
+  } catch (err) {
+    if (err instanceof VersionConflict) {
+      return { statusCode: 409, body: JSON.stringify({ error: err.message }) };
+    }
+    throw err;
+  }
 
+  const photos = photosStore();
   await photos.delete(target.full);
   await photos.delete(target.thumb);
 
@@ -59,4 +54,4 @@ export const handler: Handler = async (event, context) => {
     headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
     body: JSON.stringify(item),
   };
-};
+});
