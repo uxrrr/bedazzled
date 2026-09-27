@@ -24,6 +24,9 @@
   --pico-card-box-shadow: none;
 
   --label-tracking: 0.08em;
+  --photo-frame-bg: #fafafa;
+  --color-error: #b3402a;
+  --color-success: #4c7a3d;
 }
 
 @media only screen and (prefers-color-scheme: dark) {
@@ -41,6 +44,9 @@
     --pico-muted-border-color: #333333;
     --pico-card-background-color: #121212;
     --pico-card-border-color: transparent;
+    --photo-frame-bg: #1c1c1c;
+    --color-error: #d97a63;
+    --color-success: #8fbf7a;
   }
 }
 
