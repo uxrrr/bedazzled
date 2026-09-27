@@ -12,32 +12,20 @@ function getStorePrefix(): string {
   if (raw === undefined || raw === "") {
     throw new Error(
       "BLOBS_STORE_PREFIX must be set explicitly to 'production' or a test " +
-        "prefix like 'test-'. Refusing to guess. Current value: " + JSON.stringify(raw)
+        "prefix like 'test-'. Refusing to guess."
     );
   }
   return raw === "production" ? "" : raw;
 }
 
-function getStoreOptions() {
-  // In production, Netlify should provide NETLIFY_FUNCTIONS_TOKEN automatically.
-  // Pass it explicitly to ensure Blobs can authenticate.
-  const token = process.env.NETLIFY_FUNCTIONS_TOKEN;
-  const siteID = process.env.NETLIFY_SITE_ID || "cdb3dfb5-c8e2-44ce-9f8b-1ca931c4dc1d";
-
-  if (token && siteID) {
-    return { token, siteID };
-  }
-  return {};
-}
-
 export function itemsStore() {
-  return getStore(`${getStorePrefix()}items`, getStoreOptions());
+  return getStore(`${getStorePrefix()}items`);
 }
 
 export function photosStore() {
-  return getStore(`${getStorePrefix()}photos`, getStoreOptions());
+  return getStore(`${getStorePrefix()}photos`);
 }
 
 export function auditStore() {
-  return getStore(`${getStorePrefix()}audit`, getStoreOptions());
+  return getStore(`${getStorePrefix()}audit`);
 }
