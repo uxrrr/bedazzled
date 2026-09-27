@@ -37,13 +37,13 @@ function getStoreOptions() {
 }
 
 export function itemsStore() {
-  return getStore(`${getStorePrefix()}items`, getStoreOptions());
+  return getStore({ name: `${getStorePrefix()}items`, ...getStoreOptions() });
 }
 
 export function photosStore() {
-  return getStore(`${getStorePrefix()}photos`, getStoreOptions());
+  return getStore({ name: `${getStorePrefix()}photos`, ...getStoreOptions() });
 }
 
 export function auditStore() {
-  return getStore(`${getStorePrefix()}audit`, getStoreOptions());
+  return getStore({ name: `${getStorePrefix()}audit`, ...getStoreOptions() });
 }
