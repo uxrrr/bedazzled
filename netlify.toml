@@ -6,13 +6,11 @@
 [functions]
   node_bundler = "esbuild"
 
-[context.production.environment]
-  BLOBS_STORE_PREFIX = "production"
-  NETLIFY_SITE_ID = "cdb3dfb5-c8e2-44ce-9f8b-1ca931c4dc1d"
-  # Netlify's secrets scanner flags this UUID as high-entropy even though a
-  # site ID isn't sensitive; scope the omission to just this key rather than
-  # disabling the scan entirely.
-  SECRETS_SCAN_OMIT_KEYS = "NETLIFY_SITE_ID"
+# BLOBS_STORE_PREFIX and NETLIFY_SITE_ID must NOT be set here: env vars
+# declared in netlify.toml are only available during the build, never to
+# Functions at runtime (confirmed against Netlify's own docs). Both must be
+# set via the Netlify UI/CLI/API instead, scoped to include "Functions".
+# See docs/deploy-status-2026-09-27.md for the full story.
 
 [[headers]]
   for = "/*"

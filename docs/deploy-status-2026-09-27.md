@@ -64,6 +64,43 @@ not app logic changes.
    secret and failed the build. Fixed with `SECRETS_SCAN_OMIT_KEYS =
    "NETLIFY_SITE_ID"` in `netlify.toml`, scoped to just that one key.
 
+## Correction (verified against Netlify's own docs, not guessed)
+
+Items 1, 2, and 6 above were built on a wrong premise: **environment
+variables declared in `netlify.toml` are never available to serverless
+Functions at runtime — only during the build.** For a variable to be
+readable via `process.env` inside a Function, its scope must include
+"Functions," and that can only be set through the Netlify UI, CLI, or API,
+never the config file. This is stated directly in Netlify's docs
+(`docs.netlify.com/build/functions/environment-variables/`) and confirmed
+by multiple Netlify support-forum threads hitting the exact same mistake.
+
+So `[context.production.environment]` in `netlify.toml` was **never** going
+to make `BLOBS_STORE_PREFIX` or `NETLIFY_SITE_ID` visible to
+`lib/stores.ts`, regardless of the TOML syntax being correct. Both have
+been removed from `netlify.toml` (commit after `614412b`). They must
+instead be added as real environment variables in the Netlify dashboard
+(Site configuration > Environment variables), the same way
+`NETLIFY_BLOBS_TOKEN` already was:
+
+- `BLOBS_STORE_PREFIX` = `production`, scoped to include Functions (and
+  ideally scoped to the Production deploy context specifically, using the
+  UI's "different value per deploy context" option, so Previews/branch
+  deploys don't silently share it).
+- `NETLIFY_SITE_ID` = `cdb3dfb5-c8e2-44ce-9f8b-1ca931c4dc1d`, scoped to
+  include Functions. Not sensitive, so no need for `SECRETS_SCAN_OMIT_KEYS`
+  once it's out of `netlify.toml`.
+
+Per Netlify's own docs, automatic Blobs `siteID`/`token` detection *should*
+work unmodified inside Functions/Edge Functions/Build Plugins — the
+"environment has not been configured" error may fully disappear once
+`BLOBS_STORE_PREFIX` is set correctly via the UI (since that's what was
+actually missing, not necessarily Blobs auto-detection itself). The manual
+`getStoreOptions()` override in `lib/stores.ts` is a safe fallback either
+way, but automatic detection is worth re-testing (remove the manual
+override) once the UI-set env vars are confirmed working, rather than
+assuming both fixes were independently necessary.
+
 ## Where it was left off (open/unconfirmed)
 
 Commit `bb52cb9` (the secrets-scanner fix) was the last push. **It was
