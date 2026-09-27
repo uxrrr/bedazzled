@@ -1,56 +1,8 @@
-// Shared client-side helpers: auth, authenticated fetch, image object-URL
-// handling, and client-side photo resizing. No build step — plain script,
-// loaded by every page.
+// Shared client-side helpers: authenticated fetch, image object-URL
+// handling, and client-side photo resizing. ES module, no build step.
+import { authHeaders } from "./identity.js";
 
-// True when the URL carries an Identity one-time token (invite, password
-// recovery, email confirmation/change) — the widget itself needs to see
-// these to pop its own "set password" modal. Redirecting away before that
-// happens (as requireLogin/authHeaders do for a logged-out visitor) throws
-// the token away and strands the user on a plain login screen instead.
-function hasIdentityToken() {
-  return /(?:^|[?&#])(invite_token|recovery_token|confirmation_token|email_change_token)=/.test(
-    window.location.hash + window.location.search
-  );
-}
-
-function requireLogin() {
-  if (!window.netlifyIdentity) return;
-  if (hasIdentityToken()) return;
-  const user = netlifyIdentity.currentUser();
-  if (!user) {
-    window.location.href = "/login.html";
-  }
-}
-
-// The Identity widget's own "set password" modal for invite/recovery tokens
-// has proven unreliable in practice (a known upstream issue — it sometimes
-// just doesn't trigger). getPendingAuthAction() lets a page detect an
-// invite/recovery token itself and drive its own password-set form via
-// netlifyIdentity.gotrue directly, instead of depending on the widget's modal.
-function getPendingAuthAction() {
-  const combined =
-    window.location.hash.replace(/^#/, "") + "&" + window.location.search.replace(/^\?/, "");
-  const params = new URLSearchParams(combined);
-  const invite = params.get("invite_token");
-  const recovery = params.get("recovery_token");
-  if (invite) return { kind: "invite", token: invite };
-  if (recovery) return { kind: "recovery", token: recovery };
-  return null;
-}
-
-// Always mints/refreshes the JWT right before use — Identity tokens expire
-// hourly, and caching one leads to images silently 401ing after that.
-async function authHeaders() {
-  const user = netlifyIdentity.currentUser();
-  if (!user) {
-    window.location.href = "/login.html";
-    throw new Error("Not logged in");
-  }
-  const token = await user.jwt();
-  return { Authorization: `Bearer ${token}` };
-}
-
-async function apiFetch(path, options = {}) {
+export async function apiFetch(path, options = {}) {
   const headers = { ...(options.headers || {}), ...(await authHeaders()) };
   const res = await fetch(path, { ...options, headers });
   if (res.status === 401) {
@@ -63,7 +15,7 @@ async function apiFetch(path, options = {}) {
 // Fetches a photo through the auth-gated function and returns an object URL.
 // Caller is responsible for calling URL.revokeObjectURL(url) when done with it
 // (e.g. on navigation away) since <img src> can't carry an auth header itself.
-async function fetchPhotoObjectUrl(blobId, mime) {
+export async function fetchPhotoObjectUrl(blobId, mime) {
   const res = await apiFetch(`/.netlify/functions/photos-get?blobId=${encodeURIComponent(blobId)}&mime=${encodeURIComponent(mime)}`);
   if (!res.ok) throw new Error("Failed to load photo");
   const blob = await res.blob();
@@ -120,9 +72,9 @@ function resizeImage(file, maxDim, targetBytes) {
   });
 }
 
-// Steps JPEG quality down from 0.85 to ~0.4 until under TARGET_BYTES (or
-// gives up and returns the smallest attempt), returning both the base64
-// string and its decoded byte length.
+// Steps JPEG quality down from 0.9 to ~0.5 until under targetBytes (or gives
+// up and returns the smallest attempt), returning both the base64 string and
+// its decoded byte length.
 function encodeUnderTarget(canvas, targetBytes) {
   let best = null;
   for (let q = 0.9; q >= 0.5; q -= 0.1) {
@@ -135,7 +87,7 @@ function encodeUnderTarget(canvas, targetBytes) {
   return best;
 }
 
-async function uploadPhoto(itemId, file, etag) {
+export async function uploadPhoto(itemId, file, etag) {
   const [fullBase64, thumbBase64] = await Promise.all([
     resizeImage(file, 2000, FULL_TARGET_BYTES),
     resizeImage(file, 320, THUMB_TARGET_BYTES),

@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Jewelry Appraisal</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
-  <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
   <style>
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; }
     .card { text-decoration: none; color: inherit; }
@@ -31,62 +30,23 @@
     <div class="grid" id="grid" hidden></div>
 
     <div id="set-password-screen" hidden style="max-width: 420px; margin: 10vh auto; text-align: center;">
-      <h2 id="spf-title">Set your password</h2>
+      <h2>Set your password</h2>
       <p id="spf-error" style="color: #b00020;"></p>
       <input type="password" id="spf-password" placeholder="New password" autocomplete="new-password" />
+      <small>At least 5 characters.</small>
       <input type="password" id="spf-confirm" placeholder="Confirm password" autocomplete="new-password" />
       <button id="spf-submit">Set password &amp; continue</button>
     </div>
   </main>
 
-  <script src="/app.js"></script>
-  <script>
+  <script type="module">
+    import { getPendingAuthAction, requireLogin, currentUser, logout, getGotrue } from "/identity.js";
+    import { apiFetch, fetchPhotoObjectUrl } from "/app.js";
+
     const pendingAuth = getPendingAuthAction();
-    if (!pendingAuth) requireLogin();
 
-    if (pendingAuth) {
-      // The widget auto-processes the same invite/recovery token itself and
-      // ends up as a full-viewport, invisible, click-eating overlay (its own
-      // broken modal) that re-asserts its inline styles asynchronously — a
-      // one-time JS style change gets overwritten moments later. A
-      // stylesheet !important rule beats the widget's own inline styles
-      // permanently, regardless of when/how often it re-sets them.
-      const style = document.createElement("style");
-      style.textContent = "#netlify-identity-widget { display: none !important; pointer-events: none !important; }";
-      document.head.appendChild(style);
-    }
-
-    document.getElementById("spf-submit")?.addEventListener("click", async () => {
-      const password = document.getElementById("spf-password").value;
-      const confirm = document.getElementById("spf-confirm").value;
-      const errEl = document.getElementById("spf-error");
-      errEl.textContent = "";
-      if (password.length < 8) {
-        errEl.textContent = "Password must be at least 8 characters.";
-        return;
-      }
-      if (password !== confirm) {
-        errEl.textContent = "Passwords do not match.";
-        return;
-      }
-      try {
-        if (pendingAuth.kind === "invite") {
-          await netlifyIdentity.gotrue.acceptInvite(pendingAuth.token, password, true);
-        } else {
-          const user = await netlifyIdentity.gotrue.recover(pendingAuth.token, true);
-          await user.update({ password });
-        }
-        // Drop the token from the URL and reload clean, now logged in.
-        window.location.href = "/index.html";
-      } catch (err) {
-        errEl.textContent =
-          (err && err.message) ||
-          'Something went wrong. If this keeps happening, use the "Forgot password" link instead.';
-      }
-    });
-
-    document.getElementById("logout-btn").addEventListener("click", () => {
-      netlifyIdentity.logout();
+    document.getElementById("logout-btn").addEventListener("click", async () => {
+      await logout();
       window.location.href = "/login.html";
     });
 
@@ -162,21 +122,47 @@
       }
     }
 
-    // Only load data once a user actually exists. If there's a pending
-    // invite/recovery token and no user yet, show our own set-password form
-    // (see getPendingAuthAction in app.js) instead of the widget's own modal,
-    // which has proven unreliable in practice.
-    netlifyIdentity.on("init", (user) => {
-      if (user) {
+    document.getElementById("spf-submit").addEventListener("click", async () => {
+      const password = document.getElementById("spf-password").value;
+      const confirm = document.getElementById("spf-confirm").value;
+      const errEl = document.getElementById("spf-error");
+      errEl.textContent = "";
+      if (password.length < 5) {
+        errEl.textContent = "Password must be at least 5 characters.";
+        return;
+      }
+      if (password !== confirm) {
+        errEl.textContent = "Passwords do not match.";
+        return;
+      }
+      try {
+        const gotrue = await getGotrue();
+        if (pendingAuth.kind === "invite") {
+          await gotrue.acceptInvite(pendingAuth.token, password, true);
+        } else {
+          const user = await gotrue.recover(pendingAuth.token, true);
+          await user.update({ password });
+        }
+        history.replaceState(null, "", "/index.html");
         document.getElementById("set-password-screen").hidden = true;
+        document.getElementById("status").hidden = false;
         load();
-      } else if (pendingAuth) {
-        document.getElementById("status").hidden = true;
-        document.getElementById("set-password-screen").hidden = false;
+      } catch (err) {
+        errEl.textContent =
+          (err && err.message) ||
+          'Something went wrong. If this keeps happening, use the "Forgot password" link on the sign-in page instead.';
       }
     });
-    netlifyIdentity.on("login", () => load());
-    netlifyIdentity.init();
+
+    (async () => {
+      if (pendingAuth) {
+        document.getElementById("status").hidden = true;
+        document.getElementById("set-password-screen").hidden = false;
+        return;
+      }
+      const user = await requireLogin();
+      if (user) load();
+    })();
   </script>
 </body>
 </html>

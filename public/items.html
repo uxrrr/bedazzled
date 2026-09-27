@@ -6,7 +6,6 @@
   <title>Jewelry Appraisal — Item</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/photoswipe@5/dist/photoswipe.css" />
-  <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
   <style>
     .cover-wrap { position: relative; max-width: 420px; }
     .cover-wrap img { width: 100%; border-radius: var(--pico-border-radius); cursor: pointer; }
@@ -58,11 +57,11 @@
     </div>
   </main>
 
-  <script src="/app.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/photoswipe@5/dist/umd/photoswipe.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/photoswipe@5/dist/umd/photoswipe-lightbox.umd.min.js"></script>
-  <script>
-    requireLogin();
+  <script type="module">
+    import { requireLogin, currentUser } from "/identity.js";
+    import { apiFetch, fetchPhotoObjectUrl, uploadPhoto } from "/app.js";
 
     const params = new URLSearchParams(window.location.search);
     const itemId = params.get("id");
@@ -257,7 +256,7 @@
     document.getElementById("add-note-btn").addEventListener("click", async () => {
       const text = document.getElementById("new-note").value.trim();
       if (!text) return;
-      const user = netlifyIdentity.currentUser();
+      const user = await currentUser();
       currentItem.notes.push({ text, author: user.email, at: new Date().toISOString() });
       const res = await apiFetch("/.netlify/functions/items-update", {
         method: "PUT",
@@ -286,14 +285,10 @@
       await applyMutation(res);
     });
 
-    // Only load data once a user actually exists — see app.js's
-    // hasIdentityToken() comment for why an unconditional load() here would
-    // break the invite/recovery "set password" modal.
-    netlifyIdentity.on("init", (user) => {
+    (async () => {
+      const user = await requireLogin();
       if (user) load();
-    });
-    netlifyIdentity.on("login", () => load());
-    netlifyIdentity.init();
+    })();
   </script>
 </body>
 </html>
