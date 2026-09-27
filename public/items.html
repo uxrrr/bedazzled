@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Jewelry Appraisal — Item</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/photoswipe@5/dist/photoswipe.css" />
+  <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+  <style>
+    .cover-wrap { position: relative; max-width: 420px; }
+    .cover-wrap img { width: 100%; border-radius: var(--pico-border-radius); cursor: pointer; }
+    .thumb-strip { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.75rem; }
+    .thumb-strip .thumb { position: relative; }
+    .thumb-strip img { width: 72px; height: 72px; object-fit: cover; border-radius: 6px; cursor: pointer; border: 2px solid transparent; }
+    .thumb-strip img.is-cover { border-color: var(--pico-primary); }
+    .thumb-strip .thumb-actions { display: flex; gap: 0.25rem; margin-top: 0.15rem; }
+    .thumb-strip .thumb-actions button { font-size: 0.65rem; padding: 0.1rem 0.3rem; }
+    .note { border-bottom: 1px solid var(--pico-muted-border-color); padding: 0.5rem 0; }
+    .note small { color: var(--pico-muted-color); }
+    #comps-section { opacity: 0.6; }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <a href="/index.html">&larr; All items</a>
+    <p id="status" aria-busy="true">Loading item…</p>
+
+    <div id="content" hidden>
+      <header>
+        <h1 id="title-display"></h1>
+        <p><small>List #<span id="listnumber-display"></span> — <span id="category-display"></span></small></p>
+        <button id="edit-btn" class="secondary">Edit title / category</button>
+      </header>
+
+      <section>
+        <h3>Photos</h3>
+        <div class="cover-wrap">
+          <img id="cover-img" alt="Item cover photo" />
+          <div id="no-photo-placeholder" hidden style="aspect-ratio:1; display:flex; align-items:center; justify-content:center; background: var(--pico-muted-border-color); border-radius: var(--pico-border-radius); font-size: 3rem;">💎</div>
+        </div>
+        <div class="thumb-strip" id="thumb-strip"></div>
+        <input type="file" id="photo-input" accept="image/*" hidden />
+        <button id="add-photo-btn" class="secondary">+ Add photo</button>
+      </section>
+
+      <section>
+        <h3>Notes</h3>
+        <div id="notes-list"></div>
+        <textarea id="new-note" placeholder="Add an appraisal note…" rows="3"></textarea>
+        <button id="add-note-btn">Add note</button>
+      </section>
+
+      <section id="comps-section">
+        <h3>Comps <small>(coming in phase 2)</small></h3>
+        <p><small>Links to comparable sales will appear here in a future update.</small></p>
+      </section>
+    </div>
+  </main>
+
+  <script src="/app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/photoswipe@5/dist/umd/photoswipe.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/photoswipe@5/dist/umd/photoswipe-lightbox.umd.min.js"></script>
+  <script>
+    requireLogin();
+
+    const params = new URLSearchParams(window.location.search);
+    const itemId = params.get("id");
+    let currentItem = null;
+    let currentEtag = null;
+    let lightbox = null;
+    const objectUrls = [];
+
+    function trackUrl(url) {
+      objectUrls.push(url);
+      return url;
+    }
+    window.addEventListener("beforeunload", () => {
+      objectUrls.forEach((u) => URL.revokeObjectURL(u));
+    });
+
+    function naturalSize(url) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+        img.src = url;
+      });
+    }
+
+    async function render(item, etag) {
+      currentItem = item;
+      currentEtag = etag;
+
+      document.getElementById("status").hidden = true;
+      document.getElementById("content").hidden = false;
+      document.getElementById("title-display").textContent = item.title;
+      document.getElementById("listnumber-display").textContent = item.listNumber ?? "—";
+      document.getElementById("category-display").textContent = item.category || "uncategorized";
+
+      const coverImg = document.getElementById("cover-img");
+      const placeholder = document.getElementById("no-photo-placeholder");
+      const cover = item.photos.find((p) => p.id === item.coverPhotoId) || item.photos[0];
+
+      if (cover) {
+        coverImg.hidden = false;
+        placeholder.hidden = true;
+        coverImg.src = trackUrl(await fetchPhotoObjectUrl(cover.full, cover.mime));
+      } else {
+        coverImg.hidden = true;
+        placeholder.hidden = false;
+      }
+
+      const strip = document.getElementById("thumb-strip");
+      strip.innerHTML = "";
+      const dataSource = [];
+
+      for (const photo of item.photos) {
+        const thumbUrl = trackUrl(await fetchPhotoObjectUrl(photo.thumb, photo.mime));
+        const fullUrl = trackUrl(await fetchPhotoObjectUrl(photo.full, photo.mime));
+        const { width, height } = await naturalSize(fullUrl);
+        const index = dataSource.length;
+        dataSource.push({ src: fullUrl, width, height, alt: item.title });
+
+        const wrap = document.createElement("div");
+        wrap.className = "thumb";
+        const img = document.createElement("img");
+        img.src = thumbUrl;
+        img.className = photo.id === item.coverPhotoId ? "is-cover" : "";
+        img.addEventListener("click", () => {
+          if (item.photos.length > 1) {
+            lightbox.loadAndOpen(index, dataSource);
+          } else {
+            lightbox.loadAndOpen(0, dataSource);
+          }
+        });
+        wrap.appendChild(img);
+
+        const actions = document.createElement("div");
+        actions.className = "thumb-actions";
+        const coverBtn = document.createElement("button");
+        coverBtn.className = "secondary";
+        coverBtn.textContent = "Cover";
+        coverBtn.addEventListener("click", () => setCover(photo.id));
+        const delBtn = document.createElement("button");
+        delBtn.className = "outline contrast";
+        delBtn.textContent = "Delete";
+        delBtn.addEventListener("click", () => deletePhoto(photo.id));
+        actions.appendChild(coverBtn);
+        actions.appendChild(delBtn);
+        wrap.appendChild(actions);
+
+        strip.appendChild(wrap);
+      }
+
+      // Cover image itself also opens the gallery (per plan: single photo
+      // opens full-size directly, multi-photo opens the PhotoSwipe gallery).
+      coverImg.onclick = () => {
+        if (dataSource.length === 0) return;
+        const idx = item.photos.findIndex((p) => p.id === item.coverPhotoId);
+        lightbox.loadAndOpen(idx >= 0 ? idx : 0, dataSource);
+      };
+
+      if (lightbox) lightbox.destroy();
+      lightbox = new PhotoSwipeLightbox({
+        pswpModule: PhotoSwipe,
+      });
+      lightbox.init();
+
+      const notesList = document.getElementById("notes-list");
+      notesList.innerHTML = "";
+      for (const note of item.notes) {
+        const div = document.createElement("div");
+        div.className = "note";
+        div.innerHTML = `<div>${escapeHtml(note.text)}</div><small>${escapeHtml(note.author)} — ${new Date(note.at).toLocaleString()}</small>`;
+        notesList.appendChild(div);
+      }
+    }
+
+    function escapeHtml(s) {
+      const div = document.createElement("div");
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    async function load() {
+      const res = await apiFetch(`/.netlify/functions/items-get?id=${encodeURIComponent(itemId)}`);
+      if (!res.ok) {
+        document.getElementById("status").textContent = "Item not found.";
+        return;
+      }
+      const item = await res.json();
+      await render(item, res.headers.get("ETag"));
+    }
+
+    async function setCover(photoId) {
+      const res = await apiFetch("/.netlify/functions/items-set-cover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId, photoId }),
+      });
+      const item = await res.json();
+      await render(item, res.headers.get("ETag"));
+    }
+
+    async function deletePhoto(photoId) {
+      if (!confirm("Delete this photo?")) return;
+      const res = await apiFetch("/.netlify/functions/items-delete-photo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId, photoId }),
+      });
+      const item = await res.json();
+      await render(item, res.headers.get("ETag"));
+    }
+
+    document.getElementById("add-photo-btn").addEventListener("click", () => {
+      document.getElementById("photo-input").click();
+    });
+    document.getElementById("photo-input").addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const { item, etag } = await uploadPhoto(itemId, file, currentEtag);
+        await render(item, etag);
+      } catch (err) {
+        alert(err.message);
+      }
+      e.target.value = "";
+    });
+
+    document.getElementById("add-note-btn").addEventListener("click", async () => {
+      const text = document.getElementById("new-note").value.trim();
+      if (!text) return;
+      const user = netlifyIdentity.currentUser();
+      currentItem.notes.push({ text, author: user.email, at: new Date().toISOString() });
+      const res = await apiFetch("/.netlify/functions/items-update", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "If-Match": currentEtag },
+        body: JSON.stringify(currentItem),
+      });
+      if (res.status === 409) {
+        alert("Someone else changed this item. Reloading latest version.");
+        await load();
+        return;
+      }
+      const item = await res.json();
+      document.getElementById("new-note").value = "";
+      await render(item, res.headers.get("ETag"));
+    });
+
+    document.getElementById("edit-btn").addEventListener("click", async () => {
+      const title = prompt("Title:", currentItem.title);
+      if (title === null) return;
+      const category = prompt("Category:", currentItem.category);
+      if (category === null) return;
+      const listNumberStr = prompt("List number:", currentItem.listNumber ?? "");
+      currentItem.title = title;
+      currentItem.category = category;
+      currentItem.listNumber = listNumberStr ? Number(listNumberStr) : null;
+      const res = await apiFetch("/.netlify/functions/items-update", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "If-Match": currentEtag },
+        body: JSON.stringify(currentItem),
+      });
+      if (res.status === 409) {
+        alert("Someone else changed this item. Reloading latest version.");
+        await load();
+        return;
+      }
+      const item = await res.json();
+      await render(item, res.headers.get("ETag"));
+    });
+
+    netlifyIdentity.on("init", () => load());
+    netlifyIdentity.init();
+  </script>
+</body>
+</html>

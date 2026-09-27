@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Jewelry Appraisal</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
+  <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+  <style>
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; }
+    .card { text-decoration: none; color: inherit; }
+    .card img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: var(--pico-border-radius); background: var(--pico-muted-border-color); }
+    .card .placeholder { width: 100%; aspect-ratio: 1; border-radius: var(--pico-border-radius); background: var(--pico-muted-border-color); display: flex; align-items: center; justify-content: center; font-size: 2rem; }
+    .card small { color: var(--pico-muted-color); }
+    header nav { display: flex; justify-content: space-between; align-items: center; }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <header>
+      <nav>
+        <h1>Jewelry Appraisal</h1>
+        <div>
+          <button id="add-item-btn" class="secondary">+ Add item</button>
+          <button id="download-btn" class="secondary">Download everything</button>
+          <button id="logout-btn" class="contrast outline">Log out</button>
+        </div>
+      </nav>
+    </header>
+    <p id="status" aria-busy="true">Loading items…</p>
+    <div class="grid" id="grid" hidden></div>
+  </main>
+
+  <script src="/app.js"></script>
+  <script>
+    requireLogin();
+
+    document.getElementById("logout-btn").addEventListener("click", () => {
+      netlifyIdentity.logout();
+      window.location.href = "/login.html";
+    });
+
+    document.getElementById("add-item-btn").addEventListener("click", async () => {
+      const title = prompt("Title for the new item?");
+      if (!title) return;
+      const res = await apiFetch("/.netlify/functions/items-create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      });
+      const item = await res.json();
+      window.location.href = `/items.html?id=${item.id}`;
+    });
+
+    document.getElementById("download-btn").addEventListener("click", async () => {
+      const btn = document.getElementById("download-btn");
+      btn.setAttribute("aria-busy", "true");
+      try {
+        const res = await apiFetch("/.netlify/functions/download-everything");
+        if (!res.ok) throw new Error("Download failed");
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `jewelry-appraisal-backup-${Date.now()}.zip`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        alert(err.message);
+      } finally {
+        btn.removeAttribute("aria-busy");
+      }
+    });
+
+    async function load() {
+      const res = await apiFetch("/.netlify/functions/items-list");
+      const items = await res.json();
+      const grid = document.getElementById("grid");
+      const status = document.getElementById("status");
+      status.hidden = true;
+      grid.hidden = false;
+
+      for (const item of items) {
+        const a = document.createElement("a");
+        a.className = "card";
+        a.href = `/items.html?id=${item.id}`;
+
+        const cover = item.photos.find((p) => p.id === item.coverPhotoId) || item.photos[0];
+        if (cover) {
+          const img = document.createElement("img");
+          img.alt = item.title;
+          fetchPhotoObjectUrl(cover.thumb, cover.mime).then((url) => (img.src = url));
+          a.appendChild(img);
+        } else {
+          const placeholder = document.createElement("div");
+          placeholder.className = "placeholder";
+          placeholder.textContent = "💎";
+          a.appendChild(placeholder);
+        }
+
+        const label = document.createElement("div");
+        label.innerHTML = `<small>#${item.listNumber ?? "—"}</small><br>${item.title}`;
+        a.appendChild(label);
+
+        grid.appendChild(a);
+      }
+
+      if (items.length === 0) {
+        status.hidden = false;
+        status.removeAttribute("aria-busy");
+        status.textContent = "No items yet. Click \"Add item\" to create one.";
+      }
+    }
+
+    netlifyIdentity.on("init", () => load());
+    netlifyIdentity.init();
+  </script>
+</body>
+</html>
