@@ -75,7 +75,8 @@ export function withAuth(
       return await fn(user, event, context);
     } catch (err) {
       console.error(err);
-      return errorResponse(400, "Invalid request");
+      const message = err instanceof Error ? err.message : "Invalid request";
+      return errorResponse(400, message);
     }
   };
 }
