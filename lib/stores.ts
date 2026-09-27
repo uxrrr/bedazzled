@@ -22,10 +22,10 @@ function getStoreOptions() {
   // In production, Netlify should provide NETLIFY_FUNCTIONS_TOKEN automatically.
   // Pass it explicitly to ensure Blobs can authenticate.
   const token = process.env.NETLIFY_FUNCTIONS_TOKEN;
-  const siteId = process.env.NETLIFY_SITE_ID || "cdb3dfb5-c8e2-44ce-9f8b-1ca931c4dc1d";
+  const siteID = process.env.NETLIFY_SITE_ID || "cdb3dfb5-c8e2-44ce-9f8b-1ca931c4dc1d";
 
-  if (token && siteId) {
-    return { token, siteId };
+  if (token && siteID) {
+    return { token, siteID };
   }
   return {};
 }

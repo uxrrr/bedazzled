@@ -5,8 +5,8 @@ import { getStore } from "@netlify/blobs";
 export const handler = async () => {
   try {
     const token = process.env.NETLIFY_FUNCTIONS_TOKEN;
-    const siteId = process.env.NETLIFY_SITE_ID || "cdb3dfb5-c8e2-44ce-9f8b-1ca931c4dc1d";
-    const opts = token && siteId ? { token, siteId } : {};
+    const siteID = process.env.NETLIFY_SITE_ID || "cdb3dfb5-c8e2-44ce-9f8b-1ca931c4dc1d";
+    const opts = token && siteID ? { token, siteID } : {};
 
     const store = getStore("test-items", opts);
     const result = await store.list();
@@ -25,14 +25,14 @@ export const handler = async () => {
         .sort()
     );
     const token = process.env.NETLIFY_FUNCTIONS_TOKEN;
-    const siteId = process.env.NETLIFY_SITE_ID || "cdb3dfb5-c8e2-44ce-9f8b-1ca931c4dc1d";
+    const siteID = process.env.NETLIFY_SITE_ID || "cdb3dfb5-c8e2-44ce-9f8b-1ca931c4dc1d";
     return {
       statusCode: 500,
       body: JSON.stringify({
         error: err.message,
         error_name: err.name,
         env_vars: envVars,
-        attempted_opts: token && siteId ? { token: "***", siteId } : {},
+        attempted_opts: token && siteID ? { token: "***", siteID } : {},
       }),
     };
   }
