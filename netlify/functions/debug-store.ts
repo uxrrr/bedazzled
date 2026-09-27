@@ -15,12 +15,17 @@ export const handler = async () => {
       }),
     };
   } catch (err: any) {
+    const envVars = Object.fromEntries(
+      Object.entries(process.env)
+        .filter(([k]) => k.startsWith("NETLIFY") || k.includes("BLOB"))
+        .sort()
+    );
     return {
       statusCode: 500,
       body: JSON.stringify({
         error: err.message,
-        stack: err.stack,
-        env_prefix: process.env.BLOBS_STORE_PREFIX,
+        error_name: err.name,
+        env_vars: envVars,
       }),
     };
   }
