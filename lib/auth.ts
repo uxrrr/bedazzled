@@ -45,15 +45,6 @@ export function errorResponse(statusCode: number, message: string): HandlerRespo
   };
 }
 
-/** Every write function requires this header; centralized so none can forget it. */
-export function requireIfMatch(event: HandlerEvent): string | HandlerResponse {
-  const ifMatch = event.headers["if-match"] || event.headers["If-Match"];
-  if (!ifMatch) {
-    return errorResponse(428, "If-Match header required");
-  }
-  return ifMatch;
-}
-
 /**
  * Wraps a function handler so the auth check can't be forgotten — every
  * Netlify Function in this project should be defined via withAuth() rather

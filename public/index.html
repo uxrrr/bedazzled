@@ -20,7 +20,6 @@
       <nav>
         <h1>Jewelry Appraisal</h1>
         <div>
-          <button id="add-item-btn" class="secondary">+ Add item</button>
           <button id="download-btn" class="secondary">Download everything</button>
           <button id="logout-btn" class="contrast outline">Log out</button>
         </div>
@@ -55,18 +54,6 @@
       if (!confirm("Log out? You'll need to request a new sign-in link by email to get back in.")) return;
       await logout();
       window.location.href = "/login.html";
-    });
-
-    document.getElementById("add-item-btn").addEventListener("click", async () => {
-      const title = prompt("Title for the new item?");
-      if (!title) return;
-      const res = await apiFetch("/.netlify/functions/items-create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title }),
-      });
-      const item = await res.json();
-      window.location.href = `/items.html?id=${item.id}`;
     });
 
     document.getElementById("download-btn").addEventListener("click", async () => {
@@ -130,7 +117,7 @@
       if (items.length === 0) {
         status.hidden = false;
         status.removeAttribute("aria-busy");
-        status.textContent = "No items yet. Click \"Add item\" to create one.";
+        status.textContent = "No items yet.";
       }
     }
 

@@ -8,13 +8,20 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/photoswipe@5/dist/photoswipe.css" />
   <style>
     .cover-wrap { position: relative; max-width: 420px; }
-    .cover-wrap img { width: 100%; border-radius: var(--pico-border-radius); cursor: pointer; }
+    .cover-wrap img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: var(--pico-border-radius); cursor: pointer; }
+    .carousel-btn {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      width: 2.25rem; height: 2.25rem; border-radius: 50%; border: none;
+      background: rgba(0, 0, 0, 0.45); color: #fff; font-size: 1.1rem;
+      display: flex; align-items: center; justify-content: center; cursor: pointer;
+      opacity: 0; transition: opacity 0.15s ease; padding: 0;
+    }
+    .cover-wrap:hover .carousel-btn, .carousel-btn:focus-visible { opacity: 1; }
+    .carousel-prev { left: 0.5rem; }
+    .carousel-next { right: 0.5rem; }
     .thumb-strip { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.75rem; }
-    .thumb-strip .thumb { position: relative; }
-    .thumb-strip img { width: 72px; height: 72px; object-fit: cover; border-radius: 6px; cursor: pointer; border: 2px solid transparent; }
-    .thumb-strip img.is-cover { border-color: var(--pico-primary); }
-    .thumb-strip .thumb-actions { display: flex; gap: 0.25rem; margin-top: 0.15rem; }
-    .thumb-strip .thumb-actions button { font-size: 0.65rem; padding: 0.1rem 0.3rem; }
+    .thumb-strip img { width: 72px; height: 72px; object-fit: cover; border-radius: 6px; cursor: pointer; border: 2px solid transparent; opacity: 0.7; }
+    .thumb-strip img.is-active { border-color: var(--pico-primary); opacity: 1; }
     .note { border-bottom: 1px solid var(--pico-muted-border-color); padding: 0.5rem 0; }
     .note small { color: var(--pico-muted-color); }
     #comps-section { opacity: 0.6; }
@@ -29,25 +36,22 @@
       <header>
         <h1 id="title-display"></h1>
         <p><small>List #<span id="listnumber-display"></span> — <span id="category-display"></span></small></p>
-        <button id="edit-btn" class="secondary">Edit title / category</button>
       </header>
 
       <section>
         <h3>Photos</h3>
         <div class="cover-wrap">
-          <img id="cover-img" alt="Item cover photo" />
+          <img id="cover-img" alt="Item photo" />
           <div id="no-photo-placeholder" hidden style="aspect-ratio:1; display:flex; align-items:center; justify-content:center; background: var(--pico-muted-border-color); border-radius: var(--pico-border-radius); font-size: 3rem;">💎</div>
+          <button id="carousel-prev" class="carousel-btn" type="button" aria-label="Previous photo" hidden>&#8249;</button>
+          <button id="carousel-next" class="carousel-btn" type="button" aria-label="Next photo" hidden>&#8250;</button>
         </div>
         <div class="thumb-strip" id="thumb-strip"></div>
-        <input type="file" id="photo-input" accept="image/*" hidden />
-        <button id="add-photo-btn" class="secondary">+ Add photo</button>
       </section>
 
       <section>
         <h3>Notes</h3>
         <div id="notes-list"></div>
-        <textarea id="new-note" placeholder="Add an appraisal note…" rows="3"></textarea>
-        <button id="add-note-btn">Add note</button>
       </section>
 
       <section id="comps-section">
@@ -60,20 +64,17 @@
   <script src="https://cdn.jsdelivr.net/npm/photoswipe@5/dist/umd/photoswipe.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/photoswipe@5/dist/umd/photoswipe-lightbox.umd.min.js"></script>
   <script type="module">
-    import { requireLogin, currentUser } from "/identity.js";
-    import { apiFetch, fetchPhotoObjectUrl, uploadPhoto, escapeHtml } from "/app.js";
+    import { requireLogin } from "/identity.js";
+    import { apiFetch, fetchPhotoObjectUrl, escapeHtml } from "/app.js";
 
     const params = new URLSearchParams(window.location.search);
     const itemId = params.get("id");
-    let currentItem = null;
-    let currentEtag = null;
     let lightbox = null;
     let currentObjectUrls = [];
 
-    // render() is called repeatedly on this page (after every mutation), so
-    // object URLs from the PREVIOUS render must be revoked before creating a
-    // new batch — otherwise every edit leaks another render's worth of blob
-    // URLs for the rest of the session.
+    // Object URLs from any previous render must be revoked before creating a
+    // new batch, and again on navigation away, or they leak for the rest of
+    // the session.
     function revokeCurrentUrls() {
       currentObjectUrls.forEach((u) => URL.revokeObjectURL(u));
       currentObjectUrls = [];
@@ -84,20 +85,6 @@
     }
     window.addEventListener("beforeunload", revokeCurrentUrls);
 
-    // Wraps a mutation response: on 409 (someone else changed the item),
-    // alert and reload the latest version; otherwise re-render with the new
-    // item + ETag. Shared by every write action below instead of each one
-    // repeating the same conflict-handling branch.
-    async function applyMutation(res) {
-      if (res.status === 409) {
-        alert("Someone else changed this item. Reloading latest version.");
-        await load();
-        return;
-      }
-      const item = await res.json();
-      await render(item, res.headers.get("ETag"));
-    }
-
     function naturalSize(url) {
       return new Promise((resolve) => {
         const img = new Image();
@@ -106,10 +93,8 @@
       });
     }
 
-    async function render(item, etag) {
+    async function render(item) {
       revokeCurrentUrls();
-      currentItem = item;
-      currentEtag = etag;
 
       document.getElementById("status").hidden = true;
       document.getElementById("content").hidden = false;
@@ -119,19 +104,9 @@
 
       const coverImg = document.getElementById("cover-img");
       const placeholder = document.getElementById("no-photo-placeholder");
-      const cover = item.photos.find((p) => p.id === item.coverPhotoId) || item.photos[0];
-
-      if (cover) {
-        coverImg.hidden = false;
-        placeholder.hidden = true;
-        coverImg.src = trackUrl(await fetchPhotoObjectUrl(cover.full, cover.mime));
-      } else {
-        coverImg.hidden = true;
-        placeholder.hidden = false;
-      }
-
+      const prevBtn = document.getElementById("carousel-prev");
+      const nextBtn = document.getElementById("carousel-next");
       const strip = document.getElementById("thumb-strip");
-      strip.innerHTML = "";
 
       // Fetch/decrypt every photo's thumb+full in parallel rather than one
       // photo at a time — each fetch is its own network round trip.
@@ -146,6 +121,19 @@
         })
       );
 
+      if (photoData.length === 0) {
+        coverImg.hidden = true;
+        placeholder.hidden = false;
+        prevBtn.hidden = true;
+        nextBtn.hidden = true;
+        strip.innerHTML = "";
+        if (lightbox) lightbox.destroy();
+        return;
+      }
+
+      coverImg.hidden = false;
+      placeholder.hidden = true;
+
       const dataSource = photoData.map(({ fullUrl, width, height }) => ({
         src: fullUrl,
         width,
@@ -153,39 +141,38 @@
         alt: item.title,
       }));
 
-      photoData.forEach(({ photo, thumbUrl }, index) => {
-        const wrap = document.createElement("div");
-        wrap.className = "thumb";
+      const startIndex = Math.max(
+        photoData.findIndex(({ photo }) => photo.id === item.coverPhotoId),
+        0
+      );
+      let currentIndex = startIndex;
+
+      const thumbImgs = [];
+      strip.innerHTML = "";
+      photoData.forEach(({ thumbUrl }, index) => {
         const img = document.createElement("img");
         img.src = thumbUrl;
-        img.className = photo.id === item.coverPhotoId ? "is-cover" : "";
-        img.addEventListener("click", () => lightbox.loadAndOpen(index, dataSource));
-        wrap.appendChild(img);
-
-        const actions = document.createElement("div");
-        actions.className = "thumb-actions";
-        const coverBtn = document.createElement("button");
-        coverBtn.className = "secondary";
-        coverBtn.textContent = "Cover";
-        coverBtn.addEventListener("click", () => setCover(photo.id));
-        const delBtn = document.createElement("button");
-        delBtn.className = "outline contrast";
-        delBtn.textContent = "Delete";
-        delBtn.addEventListener("click", () => deletePhoto(photo.id));
-        actions.appendChild(coverBtn);
-        actions.appendChild(delBtn);
-        wrap.appendChild(actions);
-
-        strip.appendChild(wrap);
+        img.alt = `Photo ${index + 1} of ${photoData.length}`;
+        img.addEventListener("click", () => showPhoto(index));
+        strip.appendChild(img);
+        thumbImgs.push(img);
       });
 
-      // Cover image itself also opens the gallery (per plan: single photo
-      // opens full-size directly, multi-photo opens the PhotoSwipe gallery).
-      coverImg.onclick = () => {
-        if (dataSource.length === 0) return;
-        const idx = item.photos.findIndex((p) => p.id === item.coverPhotoId);
-        lightbox.loadAndOpen(idx >= 0 ? idx : 0, dataSource);
-      };
+      function showPhoto(index) {
+        currentIndex = index;
+        coverImg.src = photoData[index].fullUrl;
+        thumbImgs.forEach((img, i) => img.classList.toggle("is-active", i === index));
+      }
+
+      const hasMultiple = photoData.length > 1;
+      prevBtn.hidden = !hasMultiple;
+      nextBtn.hidden = !hasMultiple;
+      prevBtn.onclick = () => showPhoto((currentIndex - 1 + photoData.length) % photoData.length);
+      nextBtn.onclick = () => showPhoto((currentIndex + 1) % photoData.length);
+
+      showPhoto(startIndex);
+
+      coverImg.onclick = () => lightbox.loadAndOpen(currentIndex, dataSource);
 
       if (lightbox) lightbox.destroy();
       lightbox = new PhotoSwipeLightbox({
@@ -210,74 +197,8 @@
         return;
       }
       const item = await res.json();
-      await render(item, res.headers.get("ETag"));
+      await render(item);
     }
-
-    async function setCover(photoId) {
-      const res = await apiFetch("/.netlify/functions/items-set-cover", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "If-Match": currentEtag },
-        body: JSON.stringify({ itemId, photoId }),
-      });
-      await applyMutation(res);
-    }
-
-    async function deletePhoto(photoId) {
-      if (!confirm("Delete this photo?")) return;
-      const res = await apiFetch("/.netlify/functions/items-delete-photo", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "If-Match": currentEtag },
-        body: JSON.stringify({ itemId, photoId }),
-      });
-      await applyMutation(res);
-    }
-
-    document.getElementById("add-photo-btn").addEventListener("click", () => {
-      document.getElementById("photo-input").click();
-    });
-    document.getElementById("photo-input").addEventListener("change", async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      try {
-        const { item, etag } = await uploadPhoto(itemId, file, currentEtag);
-        await render(item, etag);
-      } catch (err) {
-        alert(err.message);
-      }
-      e.target.value = "";
-    });
-
-    document.getElementById("add-note-btn").addEventListener("click", async () => {
-      const text = document.getElementById("new-note").value.trim();
-      if (!text) return;
-      const user = await currentUser();
-      currentItem.notes.push({ text, author: user.email, at: new Date().toISOString() });
-      const res = await apiFetch("/.netlify/functions/items-update", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", "If-Match": currentEtag },
-        body: JSON.stringify(currentItem),
-      });
-      if (res.ok) document.getElementById("new-note").value = "";
-      await applyMutation(res);
-    });
-
-    document.getElementById("edit-btn").addEventListener("click", async () => {
-      const title = prompt("Title:", currentItem.title);
-      if (title === null) return;
-      const category = prompt("Category:", currentItem.category);
-      if (category === null) return;
-      const listNumberStr = prompt("List number:", currentItem.listNumber ?? "");
-      if (listNumberStr === null) return;
-      currentItem.title = title;
-      currentItem.category = category;
-      currentItem.listNumber = listNumberStr ? Number(listNumberStr) : null;
-      const res = await apiFetch("/.netlify/functions/items-update", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", "If-Match": currentEtag },
-        body: JSON.stringify(currentItem),
-      });
-      await applyMutation(res);
-    });
 
     (async () => {
       const user = await requireLogin();
