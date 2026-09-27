@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { withAuth } from "../../lib/auth";
+import { withAuth, requireIfMatch, errorResponse } from "../../lib/auth";
 import { photosStore } from "../../lib/stores";
 import { encrypt } from "../../lib/crypto";
 import { toArrayBuffer } from "../../lib/bytes";
@@ -9,39 +9,36 @@ import { logAudit } from "../../lib/audit";
 // Client resizes to a "full" (display-size) and "thumb" (grid-size) image
 // with canvas before calling this, and sends both as base64 — this keeps
 // image processing off the server entirely (no native image lib on Lambda,
-// no huge request payloads).
+// no huge request payloads). MAX_DECODED_BYTES is a belt-and-suspenders cap
+// on the server side: the client is trusted to behave, but a modified/buggy
+// client could send arbitrary bytes with a spoofed "image/jpeg" mime, so
+// bound how much gets decrypted/stored regardless of what the client claims.
+const MAX_DECODED_BYTES = 8 * 1024 * 1024;
+
 export const handler = withAuth(async (user, event) => {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: "Method not allowed" };
   }
 
-  const ifMatch = event.headers["if-match"] || event.headers["If-Match"];
-  if (!ifMatch) {
-    return { statusCode: 428, body: JSON.stringify({ error: "If-Match header required" }) };
-  }
+  const ifMatch = requireIfMatch(event);
+  if (typeof ifMatch !== "string") return ifMatch;
 
   const { itemId, fullBase64, thumbBase64, mime } = JSON.parse(event.body || "{}");
   if (!itemId || !fullBase64 || !thumbBase64 || !mime) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ error: "itemId, fullBase64, thumbBase64, mime required" }),
-    };
+    return errorResponse(400, "itemId, fullBase64, thumbBase64, mime required");
   }
   if (!mime.startsWith("image/")) {
-    return { statusCode: 400, body: JSON.stringify({ error: "mime must be an image type" }) };
+    return errorResponse(400, "mime must be an image type");
+  }
+  if (fullBase64.length > MAX_DECODED_BYTES * 1.4 || thumbBase64.length > MAX_DECODED_BYTES * 1.4) {
+    return errorResponse(413, "Photo too large");
   }
 
   const loaded = await loadItem(itemId);
   if (!loaded) {
-    return { statusCode: 404, body: JSON.stringify({ error: "Item not found" }) };
+    return errorResponse(404, "Item not found");
   }
   const { item } = loaded;
-  if (String(loaded.version) !== ifMatch) {
-    return {
-      statusCode: 409,
-      body: JSON.stringify({ error: "Item was changed by someone else, reload and retry" }),
-    };
-  }
 
   const photos = photosStore();
   const photoId = randomUUID();
@@ -58,13 +55,14 @@ export const handler = withAuth(async (user, event) => {
 
   let newVersion: number;
   try {
-    newVersion = await saveItem(itemId, item, loaded.version);
+    // saveItem does its own version check against Number(ifMatch); no need
+    // to duplicate that comparison here first.
+    newVersion = await saveItem(itemId, item, Number(ifMatch));
   } catch (err) {
     // Roll back the orphaned photo blobs since the item write didn't land.
-    await photos.delete(fullBlobId);
-    await photos.delete(thumbBlobId);
+    await Promise.all([photos.delete(fullBlobId), photos.delete(thumbBlobId)]);
     if (err instanceof VersionConflict) {
-      return { statusCode: 409, body: JSON.stringify({ error: err.message }) };
+      return errorResponse(409, err.message);
     }
     throw err;
   }

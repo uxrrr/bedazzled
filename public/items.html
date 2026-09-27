@@ -160,13 +160,7 @@
         const img = document.createElement("img");
         img.src = thumbUrl;
         img.className = photo.id === item.coverPhotoId ? "is-cover" : "";
-        img.addEventListener("click", () => {
-          if (item.photos.length > 1) {
-            lightbox.loadAndOpen(index, dataSource);
-          } else {
-            lightbox.loadAndOpen(0, dataSource);
-          }
-        });
+        img.addEventListener("click", () => lightbox.loadAndOpen(index, dataSource));
         wrap.appendChild(img);
 
         const actions = document.createElement("div");
@@ -280,6 +274,7 @@
       const category = prompt("Category:", currentItem.category);
       if (category === null) return;
       const listNumberStr = prompt("List number:", currentItem.listNumber ?? "");
+      if (listNumberStr === null) return;
       currentItem.title = title;
       currentItem.category = category;
       currentItem.listNumber = listNumberStr ? Number(listNumberStr) : null;

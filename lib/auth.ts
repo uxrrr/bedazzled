@@ -37,10 +37,29 @@ export function unauthorizedResponse() {
   };
 }
 
+export function errorResponse(statusCode: number, message: string): HandlerResponse {
+  return {
+    statusCode,
+    headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+    body: JSON.stringify({ error: message }),
+  };
+}
+
+/** Every write function requires this header; centralized so none can forget it. */
+export function requireIfMatch(event: HandlerEvent): string | HandlerResponse {
+  const ifMatch = event.headers["if-match"] || event.headers["If-Match"];
+  if (!ifMatch) {
+    return errorResponse(428, "If-Match header required");
+  }
+  return ifMatch;
+}
+
 /**
  * Wraps a function handler so the auth check can't be forgotten — every
  * Netlify Function in this project should be defined via withAuth() rather
- * than repeating the requireUser()/try-catch boilerplate itself.
+ * than repeating the requireUser()/try-catch boilerplate itself. Also catches
+ * any error the wrapped handler throws (e.g. JSON.parse on a malformed body)
+ * so it becomes a clean error response instead of an unhandled exception.
  */
 export function withAuth(
   fn: (user: IdentityUser, event: HandlerEvent, context: HandlerContext) => Promise<HandlerResponse>
@@ -52,6 +71,11 @@ export function withAuth(
     } catch {
       return unauthorizedResponse();
     }
-    return fn(user, event, context);
+    try {
+      return await fn(user, event, context);
+    } catch (err) {
+      console.error(err);
+      return errorResponse(400, "Invalid request");
+    }
   };
 }

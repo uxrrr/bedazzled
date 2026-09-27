@@ -1,6 +1,6 @@
 import type { HandlerResponse } from "@netlify/functions";
-import { withAuth } from "../../lib/auth";
-import { saveItem, VersionConflict } from "../../lib/versioned-item-store";
+import { withAuth, requireIfMatch, errorResponse } from "../../lib/auth";
+import { loadItem, saveItem, VersionConflict } from "../../lib/versioned-item-store";
 import { logAudit } from "../../lib/audit";
 import type { Item } from "../../lib/types";
 
@@ -12,14 +12,20 @@ export const handler = withAuth(async (user, event): Promise<HandlerResponse> =>
     return { statusCode: 405, body: "Method not allowed" };
   }
 
-  const ifMatch = event.headers["if-match"] || event.headers["If-Match"];
-  if (!ifMatch) {
-    return { statusCode: 428, body: JSON.stringify({ error: "If-Match header required" }) };
-  }
+  const ifMatch = requireIfMatch(event);
+  if (typeof ifMatch !== "string") return ifMatch;
 
   const item: Item = JSON.parse(event.body || "{}");
   if (!item.id) {
-    return { statusCode: 400, body: JSON.stringify({ error: "Missing item id" }) };
+    return errorResponse(400, "Missing item id");
+  }
+
+  // Confirm the item actually exists before writing — saveItem alone can't
+  // tell "stale version" from "no such item" (a missing blob's version
+  // defaults the same way a real version 1 would).
+  const existing = await loadItem(item.id);
+  if (!existing) {
+    return errorResponse(404, "Item not found");
   }
 
   let newVersion: number;
@@ -27,11 +33,7 @@ export const handler = withAuth(async (user, event): Promise<HandlerResponse> =>
     newVersion = await saveItem(item.id, item, Number(ifMatch));
   } catch (err) {
     if (err instanceof VersionConflict) {
-      return {
-        statusCode: 409,
-        headers: { "Cache-Control": "no-store" },
-        body: JSON.stringify({ error: err.message }),
-      };
+      return errorResponse(409, err.message);
     }
     throw err;
   }
