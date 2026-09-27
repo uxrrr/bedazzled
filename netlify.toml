@@ -1,3 +1,5 @@
+# Repo is now public (private-repo Git-contributor build restriction no
+# longer applies), triggering a fresh deploy of the accumulated fixes.
 [build]
   publish = "public"
   functions = "netlify/functions"
