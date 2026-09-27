@@ -27,6 +27,25 @@
       if (user) window.location.href = "/index.html";
     })();
 
+    const COOLDOWN_SECONDS = 60;
+
+    function startCooldown(btn) {
+      let remaining = COOLDOWN_SECONDS;
+      btn.disabled = true;
+      const label = btn.textContent;
+      const tick = () => {
+        btn.textContent = `Email me a sign-in link (${remaining}s)`;
+        if (remaining <= 0) {
+          btn.disabled = false;
+          btn.textContent = label;
+          return;
+        }
+        remaining -= 1;
+        setTimeout(tick, 1000);
+      };
+      tick();
+    }
+
     document.getElementById("login-form").addEventListener("submit", async (e) => {
       e.preventDefault();
       const email = document.getElementById("email").value;
@@ -40,6 +59,7 @@
         const gotrue = await getGotrue();
         await gotrue.requestPasswordRecovery(email);
         successEl.textContent = "Check your email for a sign-in link.";
+        startCooldown(btn);
       } catch (err) {
         errEl.textContent = (err && err.message) || "Could not send sign-in link.";
       } finally {
