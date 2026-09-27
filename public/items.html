@@ -109,6 +109,7 @@
       document.getElementById("title-display").textContent = item.title;
       document.getElementById("listnumber-display").textContent = item.listNumber ?? "—";
       document.getElementById("category-display").textContent = item.category || "uncategorized";
+      renderNotes(item);
 
       const coverImg = document.getElementById("cover-img");
       const placeholder = document.getElementById("no-photo-placeholder");
@@ -188,6 +189,9 @@
       });
       lightbox.init();
 
+    }
+
+    function renderNotes(item) {
       const notesList = document.getElementById("notes-list");
       notesList.innerHTML = "";
       for (const note of item.notes) {

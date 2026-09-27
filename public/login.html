@@ -43,23 +43,40 @@
     })();
 
     const COOLDOWN_SECONDS = 60;
+    const COOLDOWN_KEY = "loginCooldownUntil";
+    const BASE_LABEL = "Email me a sign-in link";
 
-    function startCooldown(btn) {
-      let remaining = COOLDOWN_SECONDS;
+    // Persisted (not just in-memory) so a reload/back-navigation during the
+    // cooldown can't be used to bypass it and re-trigger GoTrue's real
+    // per-email rate limit — the whole reason this cooldown exists.
+    function runCooldown(btn, until) {
       btn.disabled = true;
-      const label = btn.textContent;
       const tick = () => {
-        btn.textContent = `Email me a sign-in link (${remaining}s)`;
+        const remaining = Math.ceil((until - Date.now()) / 1000);
         if (remaining <= 0) {
           btn.disabled = false;
-          btn.textContent = label;
+          btn.textContent = BASE_LABEL;
+          try { localStorage.removeItem(COOLDOWN_KEY); } catch {}
           return;
         }
-        remaining -= 1;
+        btn.textContent = `${BASE_LABEL} (${remaining}s)`;
         setTimeout(tick, 1000);
       };
       tick();
     }
+
+    function startCooldown(btn) {
+      const until = Date.now() + COOLDOWN_SECONDS * 1000;
+      try { localStorage.setItem(COOLDOWN_KEY, String(until)); } catch {}
+      runCooldown(btn, until);
+    }
+
+    (() => {
+      const btn = document.getElementById("submit-btn");
+      let until = 0;
+      try { until = Number(localStorage.getItem(COOLDOWN_KEY) || 0); } catch {}
+      if (until > Date.now()) runCooldown(btn, until);
+    })();
 
     document.getElementById("login-form").addEventListener("submit", async (e) => {
       e.preventDefault();
