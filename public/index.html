@@ -91,9 +91,14 @@
 
     async function load() {
       const res = await apiFetch("/.netlify/functions/items-list");
+      const status = document.getElementById("status");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        status.textContent = `Failed to load items: ${body.error || res.status}`;
+        return;
+      }
       const items = await res.json();
       const grid = document.getElementById("grid");
-      const status = document.getElementById("status");
       status.hidden = true;
       grid.hidden = false;
 
