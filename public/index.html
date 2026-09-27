@@ -161,6 +161,15 @@
       } else if (pendingAuth) {
         document.getElementById("status").hidden = true;
         document.getElementById("set-password-screen").hidden = false;
+        // The widget auto-processes the same invite/recovery token itself
+        // and leaves behind a full-viewport, invisible, click-eating overlay
+        // (its own broken modal) — neutralize it so our form is actually
+        // usable underneath.
+        const widgetEl = document.getElementById("netlify-identity-widget");
+        if (widgetEl) {
+          widgetEl.style.pointerEvents = "none";
+          widgetEl.style.display = "none";
+        }
       }
     });
     netlifyIdentity.on("login", () => load());
