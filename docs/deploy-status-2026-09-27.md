@@ -91,28 +91,40 @@ instead be added as real environment variables in the Netlify dashboard
   include Functions. Not sensitive, so no need for `SECRETS_SCAN_OMIT_KEYS`
   once it's out of `netlify.toml`.
 
-Per Netlify's own docs, automatic Blobs `siteID`/`token` detection *should*
-work unmodified inside Functions/Edge Functions/Build Plugins — the
-"environment has not been configured" error may fully disappear once
-`BLOBS_STORE_PREFIX` is set correctly via the UI (since that's what was
-actually missing, not necessarily Blobs auto-detection itself). The manual
-`getStoreOptions()` override in `lib/stores.ts` is a safe fallback either
-way, but automatic detection is worth re-testing (remove the manual
-override) once the UI-set env vars are confirmed working, rather than
-assuming both fixes were independently necessary.
+### Second bug found: wrong getStore() call signature
+
+After fixing the above, `NETLIFY_SITE_ID`/`NETLIFY_BLOBS_TOKEN` were added
+correctly via the Netlify UI, but the exact same "environment has not been
+configured to use Netlify Blobs" error persisted. Root cause, this time
+confirmed by downloading `@netlify/blobs@8.1.0` from the npm registry and
+reading its actual compiled source (`dist/main.js`): `getStore()` takes
+**exactly one argument** — either a plain string, or a single options
+object with a `name` property inside it. There is no `getStore(name,
+options)` two-argument form. `lib/stores.ts` was calling it as
+`getStore(name, getStoreOptions())`, so JavaScript silently discarded the
+second argument (`{ siteID, token }`) entirely — the manual auth was never
+actually applied despite looking correct. Fixed in commit `aab6dc9` to call
+`getStore({ name, siteID, token })` as a single object.
+
+This means the earlier note above about "automatic detection might be
+enough on its own" is moot — `getStoreOptions()` genuinely was never being
+passed to the client at all until this fix, so we still don't know whether
+Blobs auto-detection alone (no manual siteID/token) would have worked;
+that's untested and doesn't need testing now that manual config works
+correctly.
 
 ## Where it was left off (open/unconfirmed)
 
-Commit `bb52cb9` (the secrets-scanner fix) was the last push. **It was
-never confirmed whether this deploy actually succeeded or whether login +
-item list finally works end to end** — the session has no network access
-to check the live site directly (`bedazzled-appraisal.netlify.app` isn't
-on this container's outbound allowlist), and the user stopped before
+Commit `aab6dc9` (the getStore() call-signature fix) was the last push.
+**It has not yet been confirmed whether this deploy succeeds or whether
+login + item list finally works end to end** — the session has no network
+access to check the live site directly (`bedazzled-appraisal.netlify.app`
+isn't on this container's outbound allowlist), and the user stopped before
 reporting back.
 
 ## First steps for whoever picks this back up
 
-1. Check the Netlify Deploys tab: did `bb52cb9` publish successfully?
+1. Check the Netlify Deploys tab: did `aab6dc9` publish successfully?
 2. If yes: log in, see if the item list actually loads now. This closes
    out the original bug report ("item list doesn't load after login").
 3. If it still fails: get the exact new error text (the app now surfaces
