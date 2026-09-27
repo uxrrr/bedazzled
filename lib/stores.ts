@@ -18,14 +18,26 @@ function getStorePrefix(): string {
   return raw === "production" ? "" : raw;
 }
 
+function getStoreOptions() {
+  // In production, Netlify should provide NETLIFY_FUNCTIONS_TOKEN automatically.
+  // Pass it explicitly to ensure Blobs can authenticate.
+  const token = process.env.NETLIFY_FUNCTIONS_TOKEN;
+  const siteId = process.env.NETLIFY_SITE_ID || "cdb3dfb5-c8e2-44ce-9f8b-1ca931c4dc1d";
+
+  if (token && siteId) {
+    return { token, siteId };
+  }
+  return {};
+}
+
 export function itemsStore() {
-  return getStore(`${getStorePrefix()}items`);
+  return getStore(`${getStorePrefix()}items`, getStoreOptions());
 }
 
 export function photosStore() {
-  return getStore(`${getStorePrefix()}photos`);
+  return getStore(`${getStorePrefix()}photos`, getStoreOptions());
 }
 
 export function auditStore() {
-  return getStore(`${getStorePrefix()}audit`);
+  return getStore(`${getStorePrefix()}audit`, getStoreOptions());
 }
