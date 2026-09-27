@@ -6,6 +6,10 @@
 [functions]
   node_bundler = "esbuild"
 
+[context.production]
+  [context.production.functions."*"]
+    environment = { BLOBS_STORE_PREFIX = "production" }
+
 [[headers]]
   for = "/*"
   [headers.values]
