@@ -22,6 +22,22 @@ function requireLogin() {
   }
 }
 
+// The Identity widget's own "set password" modal for invite/recovery tokens
+// has proven unreliable in practice (a known upstream issue — it sometimes
+// just doesn't trigger). getPendingAuthAction() lets a page detect an
+// invite/recovery token itself and drive its own password-set form via
+// netlifyIdentity.gotrue directly, instead of depending on the widget's modal.
+function getPendingAuthAction() {
+  const combined =
+    window.location.hash.replace(/^#/, "") + "&" + window.location.search.replace(/^\?/, "");
+  const params = new URLSearchParams(combined);
+  const invite = params.get("invite_token");
+  const recovery = params.get("recovery_token");
+  if (invite) return { kind: "invite", token: invite };
+  if (recovery) return { kind: "recovery", token: recovery };
+  return null;
+}
+
 // Always mints/refreshes the JWT right before use — Identity tokens expire
 // hourly, and caching one leads to images silently 401ing after that.
 async function authHeaders() {
