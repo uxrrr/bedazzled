@@ -12,26 +12,29 @@
   <link rel="stylesheet" href="/theme.css" />
   <style>
     .cover-wrap {
-      position: relative; max-width: 460px; border-radius: var(--pico-border-radius);
-      overflow: hidden; box-shadow: var(--pico-card-box-shadow);
+      position: relative; max-width: 520px; aspect-ratio: 1;
+      background: #fafafa; display: flex; align-items: center; justify-content: center;
     }
-    .cover-wrap img { width: 100%; aspect-ratio: 1; object-fit: cover; cursor: pointer; }
+    .cover-wrap img { max-width: 100%; max-height: 100%; object-fit: contain; cursor: pointer; }
     .carousel-btn {
       position: absolute; top: 50%; transform: translateY(-50%);
-      width: 2.25rem; height: 2.25rem; border-radius: 50%; border: none;
-      background: rgba(0, 0, 0, 0.45); color: #fff; font-size: 1.1rem;
+      width: 2.25rem; height: 2.25rem; border: 1px solid var(--pico-color); border-radius: 50%;
+      background: var(--pico-background-color); color: var(--pico-color); font-size: 1.1rem;
       display: flex; align-items: center; justify-content: center; cursor: pointer;
       opacity: 0; transition: opacity 0.15s ease; padding: 0;
     }
     .cover-wrap:hover .carousel-btn, .carousel-btn:focus-visible { opacity: 1; }
     .carousel-prev { left: 0.5rem; }
     .carousel-next { right: 0.5rem; }
-    .thumb-strip { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.75rem; }
-    .thumb-strip img { width: 72px; height: 72px; object-fit: cover; border-radius: 6px; cursor: pointer; border: 2px solid transparent; opacity: 0.7; }
-    .thumb-strip img.is-active { border-color: var(--pico-primary); opacity: 1; }
-    .note { border-bottom: 1px solid var(--pico-muted-border-color); padding: 0.5rem 0; }
+    .thumb-strip { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-top: 1rem; }
+    .thumb-strip img {
+      width: 68px; height: 68px; object-fit: contain; background: #fafafa;
+      cursor: pointer; border: 1px solid transparent; opacity: 0.6;
+    }
+    .thumb-strip img.is-active { border-color: var(--pico-color); opacity: 1; }
+    .note { border-bottom: 1px solid var(--pico-muted-border-color); padding: 0.75rem 0; }
     .note small { color: var(--pico-muted-color); }
-    #comps-section { opacity: 0.6; }
+    #comps-section { opacity: 0.5; }
   </style>
 </head>
 <body>
@@ -41,15 +44,15 @@
 
     <div id="content" hidden>
       <header>
-        <h1 id="title-display"></h1>
-        <p><small>List #<span id="listnumber-display"></span> — <span id="category-display"></span></small></p>
+        <span class="eyebrow">Item <span id="listnumber-display"></span> — <span id="category-display"></span></span>
+        <h1 class="lot-title" id="title-display"></h1>
       </header>
 
       <section>
         <h3>Photos</h3>
         <div class="cover-wrap">
           <img id="cover-img" alt="Item photo" />
-          <div id="no-photo-placeholder" hidden style="aspect-ratio:1; display:flex; align-items:center; justify-content:center; background: var(--pico-muted-border-color); border-radius: var(--pico-border-radius); font-size: 3rem;">💎</div>
+          <div id="no-photo-placeholder" hidden style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size: 3rem;">💎</div>
           <button id="carousel-prev" class="carousel-btn" type="button" aria-label="Previous photo" hidden>&#8249;</button>
           <button id="carousel-next" class="carousel-btn" type="button" aria-label="Next photo" hidden>&#8250;</button>
         </div>

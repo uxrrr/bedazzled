@@ -10,18 +10,16 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/theme.css" />
   <style>
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1.25rem; }
-    .card {
-      text-decoration: none; color: inherit; background: var(--pico-card-background-color);
-      border: 1px solid var(--pico-card-border-color); border-radius: var(--pico-border-radius);
-      box-shadow: var(--pico-card-box-shadow); overflow: hidden; display: block;
-      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 2.5rem 1.75rem; }
+    .card { text-decoration: none; color: inherit; display: block; }
+    .card .frame {
+      aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+      background: #fafafa; margin-bottom: 0.9rem; overflow: hidden;
     }
-    .card:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(43, 38, 34, 0.1), 0 12px 28px rgba(43, 38, 34, 0.08); }
-    .card img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: var(--pico-muted-border-color); }
-    .card .placeholder { width: 100%; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-size: 2rem; background: var(--pico-muted-border-color); }
-    .card .label { padding: 0.6rem 0.75rem; }
-    .card small { color: var(--pico-muted-color); }
+    .card img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+    .card .placeholder { font-size: 2rem; }
+    .card .lot-number { margin-bottom: 0.2rem; }
+    .card .lot-title { font-size: 0.95rem; }
     header nav { display: flex; justify-content: space-between; align-items: center; }
   </style>
 </head>
@@ -31,8 +29,8 @@
       <nav>
         <h1>Jewelry Appraisal</h1>
         <div>
-          <button id="download-btn" class="secondary">Download everything</button>
-          <button id="logout-btn" class="contrast outline">Log out</button>
+          <button id="download-btn" class="btn-flat">Download everything</button>
+          <button id="logout-btn" class="btn-flat">Log out</button>
         </div>
       </nav>
     </header>
@@ -41,8 +39,8 @@
 
     <div id="continue-screen" hidden style="max-width: 420px; margin: 10vh auto; text-align: center;">
       <h2 id="continue-heading">Continue</h2>
-      <p id="continue-error" style="color: #b00020;"></p>
-      <button id="continue-btn">Continue</button>
+      <p id="continue-error" style="color: #b3402a;"></p>
+      <button id="continue-btn" class="btn-flat">Continue</button>
     </div>
   </main>
 
@@ -105,23 +103,31 @@
         a.className = "card";
         a.href = `/items.html?id=${item.id}`;
 
+        const frame = document.createElement("div");
+        frame.className = "frame";
         const cover = item.photos.find((p) => p.id === item.coverPhotoId) || item.photos[0];
         if (cover) {
           const img = document.createElement("img");
           img.alt = item.title;
           fetchPhotoObjectUrl(cover.thumb, cover.mime).then((url) => (img.src = url));
-          a.appendChild(img);
+          frame.appendChild(img);
         } else {
           const placeholder = document.createElement("div");
           placeholder.className = "placeholder";
           placeholder.textContent = "💎";
-          a.appendChild(placeholder);
+          frame.appendChild(placeholder);
         }
+        a.appendChild(frame);
 
-        const label = document.createElement("div");
-        label.className = "label";
-        label.innerHTML = `<small>#${escapeHtml(String(item.listNumber ?? "—"))}</small><br>${escapeHtml(item.title)}`;
-        a.appendChild(label);
+        const lotNumber = document.createElement("span");
+        lotNumber.className = "eyebrow lot-number";
+        lotNumber.textContent = `Item ${escapeHtml(String(item.listNumber ?? "—"))}`;
+        a.appendChild(lotNumber);
+
+        const title = document.createElement("span");
+        title.className = "lot-title";
+        title.textContent = item.title;
+        a.appendChild(title);
 
         grid.appendChild(a);
       }
