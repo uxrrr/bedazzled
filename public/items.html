@@ -61,7 +61,7 @@
   <script src="https://cdn.jsdelivr.net/npm/photoswipe@5/dist/umd/photoswipe-lightbox.umd.min.js"></script>
   <script type="module">
     import { requireLogin, currentUser } from "/identity.js";
-    import { apiFetch, fetchPhotoObjectUrl, uploadPhoto } from "/app.js";
+    import { apiFetch, fetchPhotoObjectUrl, uploadPhoto, escapeHtml } from "/app.js";
 
     const params = new URLSearchParams(window.location.search);
     const itemId = params.get("id");
@@ -201,12 +201,6 @@
         div.innerHTML = `<div>${escapeHtml(note.text)}</div><small>${escapeHtml(note.author)} — ${new Date(note.at).toLocaleString()}</small>`;
         notesList.appendChild(div);
       }
-    }
-
-    function escapeHtml(s) {
-      const div = document.createElement("div");
-      div.textContent = s;
-      return div.innerHTML;
     }
 
     async function load() {

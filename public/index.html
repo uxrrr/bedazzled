@@ -9,7 +9,7 @@
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; }
     .card { text-decoration: none; color: inherit; }
     .card img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: var(--pico-border-radius); background: var(--pico-muted-border-color); }
-    .card .placeholder { width: 100%; aspect-ratio: 1; border-radius: var(--pico-border-radius); background: var(--pico-muted-border-color); display: flex; align-items: center; justify-content: center; font-size: 2rem; }
+    .card .placeholder { width: 100%; aspect-ratio: 1; border-radius: var(--pico-border-radius); display: flex; align-items: center; justify-content: center; font-size: 2rem; }
     .card small { color: var(--pico-muted-color); }
     header nav { display: flex; justify-content: space-between; align-items: center; }
   </style>
@@ -29,23 +29,30 @@
     <p id="status" aria-busy="true">Loading items…</p>
     <div class="grid" id="grid" hidden></div>
 
-    <div id="set-password-screen" hidden style="max-width: 420px; margin: 10vh auto; text-align: center;">
-      <h2>Set your password</h2>
-      <p id="spf-error" style="color: #b00020;"></p>
-      <input type="password" id="spf-password" placeholder="New password" autocomplete="new-password" />
-      <small>At least 5 characters.</small>
-      <input type="password" id="spf-confirm" placeholder="Confirm password" autocomplete="new-password" />
-      <button id="spf-submit">Set password &amp; continue</button>
+    <div id="continue-screen" hidden style="max-width: 420px; margin: 10vh auto; text-align: center;">
+      <h2 id="continue-heading">Continue</h2>
+      <p id="continue-error" style="color: #b00020;"></p>
+      <button id="continue-btn">Continue</button>
     </div>
   </main>
 
   <script type="module">
-    import { getPendingAuthAction, requireLogin, currentUser, logout, getGotrue } from "/identity.js";
-    import { apiFetch, fetchPhotoObjectUrl } from "/app.js";
+    import { getPendingAuthAction, currentUser, requireLogin, logout, getGotrue } from "/identity.js";
+    import { apiFetch, fetchPhotoObjectUrl, escapeHtml } from "/app.js";
 
     const pendingAuth = getPendingAuthAction();
 
+    // A GoTrue invite acceptance requires some password value at the API
+    // level — there is no passwordless overload. Generate one nobody will
+    // ever see or need again; the user signs in via emailed link from here on.
+    function generatePassword() {
+      const bytes = new Uint8Array(32);
+      crypto.getRandomValues(bytes);
+      return btoa(String.fromCharCode(...bytes));
+    }
+
     document.getElementById("logout-btn").addEventListener("click", async () => {
+      if (!confirm("Log out? You'll need to request a new sign-in link by email to get back in.")) return;
       await logout();
       window.location.href = "/login.html";
     });
@@ -109,7 +116,7 @@
         }
 
         const label = document.createElement("div");
-        label.innerHTML = `<small>#${item.listNumber ?? "—"}</small><br>${item.title}`;
+        label.innerHTML = `<small>#${escapeHtml(String(item.listNumber ?? "—"))}</small><br>${escapeHtml(item.title)}`;
         a.appendChild(label);
 
         grid.appendChild(a);
@@ -122,44 +129,50 @@
       }
     }
 
-    document.getElementById("spf-submit").addEventListener("click", async () => {
-      const password = document.getElementById("spf-password").value;
-      const confirm = document.getElementById("spf-confirm").value;
-      const errEl = document.getElementById("spf-error");
+    async function redeemPendingAuth() {
+      const errEl = document.getElementById("continue-error");
+      const btn = document.getElementById("continue-btn");
       errEl.textContent = "";
-      if (password.length < 5) {
-        errEl.textContent = "Password must be at least 5 characters.";
-        return;
-      }
-      if (password !== confirm) {
-        errEl.textContent = "Passwords do not match.";
-        return;
-      }
+      btn.setAttribute("aria-busy", "true");
       try {
         const gotrue = await getGotrue();
         if (pendingAuth.kind === "invite") {
-          await gotrue.acceptInvite(pendingAuth.token, password, true);
+          await gotrue.acceptInvite(pendingAuth.token, generatePassword(), true);
         } else {
-          const user = await gotrue.recover(pendingAuth.token, true);
-          await user.update({ password });
+          // gotrue.recover() alone fully logs the user in — this app never
+          // asks for or sets a password, so there is no follow-up step here.
+          await gotrue.recover(pendingAuth.token, true);
         }
-        history.replaceState(null, "", "/index.html");
-        document.getElementById("set-password-screen").hidden = true;
+        document.getElementById("continue-screen").hidden = true;
         document.getElementById("status").hidden = false;
         load();
       } catch (err) {
         errEl.textContent =
           (err && err.message) ||
-          'Something went wrong. If this keeps happening, use the "Forgot password" link on the sign-in page instead.';
+          "This link has expired or was already used — request a new sign-in link from the sign-in page.";
+      } finally {
+        btn.removeAttribute("aria-busy");
+        // Clear the token from the URL after every attempt, success or
+        // failure, so a reload can never re-submit a spent (or in-flight)
+        // token.
+        history.replaceState(null, "", "/index.html");
       }
-    });
+    }
 
     (async () => {
-      if (pendingAuth) {
+      // If a session already exists (e.g. an old link clicked while still
+      // logged in), skip redemption entirely rather than attempting it.
+      if (pendingAuth && !(await currentUser())) {
         document.getElementById("status").hidden = true;
-        document.getElementById("set-password-screen").hidden = false;
+        document.getElementById("continue-heading").textContent =
+          pendingAuth.kind === "invite" ? "Finish setting up your account" : "Sign in";
+        document.getElementById("continue-btn").textContent =
+          pendingAuth.kind === "invite" ? "Set up account" : "Continue signing in";
+        document.getElementById("continue-screen").hidden = false;
+        document.getElementById("continue-btn").addEventListener("click", redeemPendingAuth, { once: true });
         return;
       }
+      if (pendingAuth) history.replaceState(null, "", "/index.html");
       const user = await requireLogin();
       if (user) load();
     })();

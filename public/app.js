@@ -2,6 +2,12 @@
 // handling, and client-side photo resizing. ES module, no build step.
 import { authHeaders } from "./identity.js";
 
+export function escapeHtml(s) {
+  const div = document.createElement("div");
+  div.textContent = s;
+  return div.innerHTML;
+}
+
 export async function apiFetch(path, options = {}) {
   const headers = { ...(options.headers || {}), ...(await authHeaders()) };
   const res = await fetch(path, { ...options, headers });

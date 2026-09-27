@@ -9,15 +9,14 @@
 <body>
   <main class="container" style="max-width: 420px; margin-top: 15vh;">
     <h1>Jewelry Appraisal</h1>
-    <p>This site is private. Sign in to continue.</p>
+    <p>This site is private. No password needed — we'll email you a sign-in link.</p>
 
     <form id="login-form">
       <input type="email" id="email" placeholder="Email" autocomplete="username" required />
-      <input type="password" id="password" placeholder="Password" autocomplete="current-password" required />
       <p id="error" style="color: #b00020;"></p>
-      <button type="submit" id="submit-btn">Sign in</button>
+      <p id="success" style="color: #0a7d2c;"></p>
+      <button type="submit" id="submit-btn">Email me a sign-in link</button>
     </form>
-    <p><a href="#" id="forgot-link">Forgot password?</a></p>
   </main>
 
   <script type="module">
@@ -31,36 +30,20 @@
     document.getElementById("login-form").addEventListener("submit", async (e) => {
       e.preventDefault();
       const email = document.getElementById("email").value;
-      const password = document.getElementById("password").value;
       const errEl = document.getElementById("error");
+      const successEl = document.getElementById("success");
       const btn = document.getElementById("submit-btn");
       errEl.textContent = "";
+      successEl.textContent = "";
       btn.setAttribute("aria-busy", "true");
       try {
         const gotrue = await getGotrue();
-        await gotrue.login(email, password, true);
-        window.location.href = "/index.html";
+        await gotrue.requestPasswordRecovery(email);
+        successEl.textContent = "Check your email for a sign-in link.";
       } catch (err) {
-        errEl.textContent = (err && err.message) || "Sign in failed. Check your email and password.";
+        errEl.textContent = (err && err.message) || "Could not send sign-in link.";
       } finally {
         btn.removeAttribute("aria-busy");
-      }
-    });
-
-    document.getElementById("forgot-link").addEventListener("click", async (e) => {
-      e.preventDefault();
-      const email = document.getElementById("email").value;
-      if (!email) {
-        document.getElementById("error").textContent = "Enter your email above first, then click \"Forgot password?\".";
-        return;
-      }
-      try {
-        const gotrue = await getGotrue();
-        await gotrue.requestPasswordRecovery(email);
-        document.getElementById("error").style.color = "#0a7d2c";
-        document.getElementById("error").textContent = "Check your email for a password reset link.";
-      } catch (err) {
-        document.getElementById("error").textContent = (err && err.message) || "Could not send reset email.";
       }
     });
   </script>
