@@ -5,18 +5,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Jewelry Appraisal — Sign in</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/theme.css" />
+  <style>
+    body { display: flex; min-height: 100vh; align-items: center; }
+    .login-card { max-width: 420px; margin: 0 auto; width: 100%; }
+    .login-card h1 { margin-bottom: 0.25rem; }
+    .login-card p.lede { color: var(--pico-muted-color); margin-bottom: 1.5rem; }
+    #error, #success { font-size: 0.9rem; margin: 0.5rem 0 0; }
+    #error { color: #b3402a; }
+    #success { color: #4c7a3d; }
+  </style>
 </head>
 <body>
-  <main class="container" style="max-width: 420px; margin-top: 15vh;">
-    <h1>Jewelry Appraisal</h1>
-    <p>This site is private. No password needed — we'll email you a sign-in link.</p>
+  <main class="container">
+    <article class="login-card">
+      <h1>Jewelry Appraisal</h1>
+      <p class="lede">This site is private. No password needed — we'll email you a sign-in link.</p>
 
-    <form id="login-form">
-      <input type="email" id="email" placeholder="Email" autocomplete="username" required />
-      <p id="error" style="color: #b00020;"></p>
-      <p id="success" style="color: #0a7d2c;"></p>
-      <button type="submit" id="submit-btn">Email me a sign-in link</button>
-    </form>
+      <form id="login-form">
+        <input type="email" id="email" placeholder="Email" autocomplete="username" required />
+        <p id="error"></p>
+        <p id="success"></p>
+        <button type="submit" id="submit-btn">Email me a sign-in link</button>
+      </form>
+    </article>
   </main>
 
   <script type="module">

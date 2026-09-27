@@ -6,9 +6,16 @@
   <title>Jewelry Appraisal — Item</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/photoswipe@5/dist/photoswipe.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/theme.css" />
   <style>
-    .cover-wrap { position: relative; max-width: 420px; }
-    .cover-wrap img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: var(--pico-border-radius); cursor: pointer; }
+    .cover-wrap {
+      position: relative; max-width: 460px; border-radius: var(--pico-border-radius);
+      overflow: hidden; box-shadow: var(--pico-card-box-shadow);
+    }
+    .cover-wrap img { width: 100%; aspect-ratio: 1; object-fit: cover; cursor: pointer; }
     .carousel-btn {
       position: absolute; top: 50%; transform: translateY(-50%);
       width: 2.25rem; height: 2.25rem; border-radius: 50%; border: none;

@@ -1,0 +1,53 @@
+/* Shared visual theme, layered on top of Pico CSS. Warm, quiet palette
+   suited to a private jewelry-appraisal catalog rather than Pico's default
+   blue/gray developer-tool look. */
+
+:root {
+  --pico-font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --heading-font: "Playfair Display", Georgia, serif;
+
+  --pico-primary: #9c6b3f;
+  --pico-primary-hover: #7f5732;
+  --pico-primary-background: #9c6b3f;
+  --pico-primary-hover-background: #7f5732;
+  --pico-primary-underline: rgba(156, 107, 63, 0.5);
+  --pico-primary-focus: rgba(156, 107, 63, 0.25);
+
+  --pico-background-color: #faf7f2;
+  --pico-color: #2b2622;
+  --pico-h1-color: #201c19;
+  --pico-muted-color: #7a7168;
+  --pico-muted-border-color: #e6ddd1;
+  --pico-card-background-color: #ffffff;
+  --pico-card-border-color: #ece3d6;
+  --pico-card-box-shadow: 0 1px 3px rgba(43, 38, 34, 0.06), 0 8px 20px rgba(43, 38, 34, 0.04);
+}
+
+@media only screen and (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --pico-primary: #cf9f6e;
+    --pico-primary-hover: #ddb181;
+    --pico-primary-background: #9c6b3f;
+    --pico-primary-hover-background: #b17f4d;
+    --pico-primary-focus: rgba(207, 159, 110, 0.25);
+
+    --pico-background-color: #17140f;
+    --pico-color: #ece5d8;
+    --pico-h1-color: #f5efe4;
+    --pico-muted-color: #a89a87;
+    --pico-muted-border-color: #322c24;
+    --pico-card-background-color: #1f1a14;
+    --pico-card-border-color: #332c22;
+    --pico-card-box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 8px 20px rgba(0, 0, 0, 0.25);
+  }
+}
+
+h1, h2, h3 {
+  font-family: var(--heading-font);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+header nav h1 {
+  margin-bottom: 0;
+}

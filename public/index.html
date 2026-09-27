@@ -5,11 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Jewelry Appraisal</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/theme.css" />
   <style>
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; }
-    .card { text-decoration: none; color: inherit; }
-    .card img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: var(--pico-border-radius); background: var(--pico-muted-border-color); }
-    .card .placeholder { width: 100%; aspect-ratio: 1; border-radius: var(--pico-border-radius); display: flex; align-items: center; justify-content: center; font-size: 2rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1.25rem; }
+    .card {
+      text-decoration: none; color: inherit; background: var(--pico-card-background-color);
+      border: 1px solid var(--pico-card-border-color); border-radius: var(--pico-border-radius);
+      box-shadow: var(--pico-card-box-shadow); overflow: hidden; display: block;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .card:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(43, 38, 34, 0.1), 0 12px 28px rgba(43, 38, 34, 0.08); }
+    .card img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: var(--pico-muted-border-color); }
+    .card .placeholder { width: 100%; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-size: 2rem; background: var(--pico-muted-border-color); }
+    .card .label { padding: 0.6rem 0.75rem; }
     .card small { color: var(--pico-muted-color); }
     header nav { display: flex; justify-content: space-between; align-items: center; }
   </style>
@@ -108,6 +119,7 @@
         }
 
         const label = document.createElement("div");
+        label.className = "label";
         label.innerHTML = `<small>#${escapeHtml(String(item.listNumber ?? "—"))}</small><br>${escapeHtml(item.title)}`;
         a.appendChild(label);
 
