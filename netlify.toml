@@ -10,6 +10,7 @@
 
 [context.production.environment]
   BLOBS_STORE_PREFIX = "production"
+  NETLIFY_SITE_ID = "cdb3dfb5-c8e2-44ce-9f8b-1ca931c4dc1d"
 
 [[headers]]
   for = "/*"

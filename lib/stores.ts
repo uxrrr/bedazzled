@@ -18,14 +18,32 @@ function getStorePrefix(): string {
   return raw === "production" ? "" : raw;
 }
 
+// Automatic Blobs context detection isn't reliable in this project's deploy
+// setup, so we authenticate explicitly with the same NETLIFY_SITE_ID /
+// NETLIFY_BLOBS_TOKEN pair scripts/seed.ts already uses off-platform. A real
+// Netlify Personal Access Token (User settings > Applications > Personal
+// access tokens), not any auto-injected variable — an earlier attempt at
+// this used a nonexistent NETLIFY_FUNCTIONS_TOKEN and silently no-opped.
+function getStoreOptions() {
+  const siteID = process.env.NETLIFY_SITE_ID;
+  const token = process.env.NETLIFY_BLOBS_TOKEN;
+  if (!siteID || !token) {
+    throw new Error(
+      "NETLIFY_SITE_ID and NETLIFY_BLOBS_TOKEN must both be set for Netlify " +
+        "Blobs to authenticate."
+    );
+  }
+  return { siteID, token };
+}
+
 export function itemsStore() {
-  return getStore(`${getStorePrefix()}items`);
+  return getStore(`${getStorePrefix()}items`, getStoreOptions());
 }
 
 export function photosStore() {
-  return getStore(`${getStorePrefix()}photos`);
+  return getStore(`${getStorePrefix()}photos`, getStoreOptions());
 }
 
 export function auditStore() {
-  return getStore(`${getStorePrefix()}audit`);
+  return getStore(`${getStorePrefix()}audit`, getStoreOptions());
 }
